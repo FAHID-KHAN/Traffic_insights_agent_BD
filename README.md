@@ -71,26 +71,94 @@ Traffic_insights_agent_BD/
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Clone & Navigate
 
 ```bash
+git clone <your-repo-url>
 cd Traffic_insights_agent_BD
+```
+
+### 2. Create a Virtual Environment (recommended)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+```
+
+### 3. Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run the Application
+### 4. Run the Application
 
 ```bash
 python run.py
 ```
 
-The server starts at **http://localhost:8000**
+The server starts at **http://localhost:8000** — open it in your browser to see the dashboard.
 
-### 3. Start Scraping
+> **Note:** The SQLite database (`data/accidents.db`) is created automatically on first run. No extra setup needed.
 
-- Click the **"Scrape Now"** button on the dashboard, or
-- Wait for the automatic scheduler (every 6 hours), or
-- Manually trigger via API: `POST http://localhost:8000/api/scrape`
+### 5. Start Scraping Data
+
+You won't see any data on the dashboard until you run your first scrape:
+
+- Click the **"Scrape Now"** button in the top-right corner of the dashboard, or
+- Manually trigger via API:
+  ```bash
+  curl -X POST http://localhost:8000/api/scrape
+  ```
+- Or just wait — the built-in scheduler scrapes automatically every 6 hours.
+
+The first scrape may take 1–2 minutes as it fetches and processes articles from The Daily Star.
+
+---
+
+## Using the Dashboard
+
+Once the server is running, open **http://localhost:8000** in any browser. The UI is a single-page dark-themed dashboard with six tabs across the top:
+
+### Dashboard (Home)
+
+This is the landing page. It shows:
+- **Summary cards** — total accidents, deaths, injuries, today's count, and number of articles scraped.
+- **30-day trend line** — accidents, deaths, and injuries over the last month.
+- **Accident types doughnut** — breakdown of the current month by type (bus crash, hit-and-run, etc.).
+- **Top danger districts bar chart** — the most accident-prone districts.
+
+### Daily Analysis
+
+Pick any date using the date picker at the top. The page updates with:
+- Stat cards for that day (accidents, deaths, injuries).
+- A pie chart of accident types and a bar chart by district for that specific day.
+
+### Monthly Analysis
+
+Select a year and month from the dropdowns. You'll see:
+- Monthly totals plus the daily average.
+- A bar chart showing the day-by-day breakdown within that month.
+- Accident types and top districts for the selected month.
+
+### Danger Map
+
+An interactive **Leaflet** map centered on Bangladesh. Toggle between two views:
+- **Markers** — clustered circle markers; click a cluster to zoom in, click an individual marker to see accident details (type, date, casualties, link to source article).
+- **Heatmap** — color-coded intensity overlay highlighting the most dangerous areas.
+
+### Danger Zones
+
+A ranked list of the top 20 most accident-prone **districts**, showing total accidents, deaths, and injuries for each. Cards are sorted by frequency.
+
+### Records
+
+A full searchable table of every extracted accident. Columns include date, type, location, district, deaths, injuries, vehicles, and a link to the original article. Use the search box to filter by location, type, or any keyword.
+
+### Scrape Now Button
+
+The **"Scrape Now"** button in the header triggers an immediate scrape. While running, the button shows a spinner. When done, a toast notification reports how many articles were found and how many were new. The dashboard auto-refreshes with the latest data.
 
 ---
 
