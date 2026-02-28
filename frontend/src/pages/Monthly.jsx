@@ -15,6 +15,7 @@ export default function Monthly() {
   const years = [];
   for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) years.push(y);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     try {
       const d = await api(`/monthly?year=${year}&month=${month}`);
@@ -22,7 +23,7 @@ export default function Monthly() {
     } catch (err) {
       console.error('Monthly stats error:', err);
     }
-  }, [year, month]); // eslint-disable-line react-hooks/preserve-manual-memoization
+  }, [year, month]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
