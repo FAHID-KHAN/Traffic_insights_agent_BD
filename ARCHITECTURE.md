@@ -26,9 +26,15 @@
    - [Request / Response Cycle](#request--response-cycle)
 6. [Database Schema](#database-schema)
 7. [Build & Deployment Pipeline](#build--deployment-pipeline)
-8. [Development vs Production](#development-vs-production)
-9. [CI / CD](#ci--cd)
-10. [Dependency Map](#dependency-map)
+8. [Containerised Deployment](#containerised-deployment)
+   - [Dockerfile (Multi-Stage Build)](#dockerfile-multi-stage-build)
+   - [Docker Compose — Dev](#docker-compose--dev)
+   - [Docker Compose — Prod](#docker-compose--prod)
+   - [Makefile Targets](#makefile-targets)
+9. [Environment Configuration](#environment-configuration)
+10. [Development vs Production](#development-vs-production)
+11. [CI / CD](#ci--cd)
+12. [Dependency Map](#dependency-map)
 
 ---
 
@@ -90,15 +96,18 @@ The backend lives in the `app/` Python package. Every module has a single respon
 
 | File | Purpose |
 |------|---------|
-| `run.py` | Entry point. Imports `create_app()` from `app.server`, binds the app to Uvicorn on `0.0.0.0:8000` with hot-reload. |
-| `app/server.py` | **Application factory** — `create_app()` builds and returns a configured FastAPI instance. |
+| `run.py` | Entry point. Imports `create_app()` from `app.server`, reads `API_HOST`, `API_PORT`, and `DEBUG` from config, and binds to Uvicorn with conditional reload and log level. |
+| `app/server.py` | **Application factory** — `create_app()` builds and returns a configured FastAPI instance. Environment-aware: disables Swagger/ReDoc in production, configures logging from `LOG_LEVEL`, and sets CORS origins from the `CORS_ORIGINS` env var. |
 
 **Startup sequence (`create_app` → `lifespan`):**
 
 ```
 run.py
+  ├─ Reads API_HOST, API_PORT, DEBUG from app.config
   └─▶ create_app()              [app/server.py]
-       ├─ Add CORS middleware    [allows cross-origin requests]
+       ├─ Configure logging      [level from LOG_LEVEL env var]
+       ├─ Conditional Swagger     [/docs + /redoc only when DEBUG=True]
+       ├─ Add CORS middleware    [origins from CORS_ORIGINS env var]
        ├─ Register API router    [app/routes.py]
        ├─ Mount /assets static   [static/dist/assets/]
        ├─ Register SPA catch-all [serves index.html, or 503 if not built]
@@ -117,21 +126,44 @@ The SPA catch-all gracefully returns a 503 JSON response with build instructions
 
 **File:** `app/config.py`
 
-Centralises every tuneable constant so no other module contains magic values.
+Centralises every tuneable constant so no other module contains magic values. All settings can be overridden at runtime via environment variables, enabling a single codebase to run in development and production without code changes.
 
-| Setting | Default | Role |
-|---------|---------|------|
-| `BASE_DIR` | project root | Anchor for all relative paths |
-| `DATA_DIR` | `<root>/data/` | SQLite database location |
-| `STATIC_DIR` | `<root>/static/` | React production build |
-| `DB_PATH` | `data/accidents.db` | Full database file path |
-| `DAILY_STAR_ACCIDENT_URL` | `thedailystar.net/tags/road-accident` | Scrape target |
-| `SCRAPE_INTERVAL_HOURS` | `6` | Background scrape frequency |
-| `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
-| `MAX_PAGES_PER_SCRAPE` | `5` | Pagination depth limit |
-| `BANGLADESH_DISTRICTS` | 64 entries | NLP location matching list |
-| `BANGLADESH_DIVISIONS` | 10 entries | Division-level matching list |
-| `ACCIDENT_TYPES` | 30+ patterns | Keyword list for type classification |
+**Environment detection:**
+
+```python
+APP_ENV = os.getenv("APP_ENV", "development")   # "development" | "production"
+DEBUG   = APP_ENV == "development"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
+```
+
+| Setting | Env Var | Default | Role |
+|---------|---------|---------|------|
+| `APP_ENV` | `APP_ENV` | `development` | Controls debug mode, logging, docs visibility |
+| `DEBUG` | — (derived) | `True` in dev | Enables auto-reload, Swagger, debug logging |
+| `LOG_LEVEL` | `LOG_LEVEL` | `DEBUG` / `WARNING` | Python logging level |
+| `BASE_DIR` | — | project root | Anchor for all relative paths |
+| `DATA_DIR` | `DATA_DIR` | `<root>/data/` | SQLite database location |
+| `STATIC_DIR` | — | `<root>/static/` | React production build |
+| `DB_PATH` | `DB_PATH` | `data/accidents.db` | Full database file path |
+| `DAILY_STAR_ACCIDENT_URL` | — | `thedailystar.net/tags/road-accident` | Scrape target |
+| `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `6` | Background scrape frequency |
+| `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
+| `REQUEST_DELAY` | `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
+| `MAX_PAGES_PER_SCRAPE` | `MAX_PAGES` | `5` | Pagination depth limit |
+| `API_HOST` | `API_HOST` | `0.0.0.0` | Server bind address |
+| `API_PORT` | `API_PORT` | `8000` | Server port |
+| `CORS_ORIGINS` | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
+| `BANGLADESH_DISTRICTS` | — | 64 entries | NLP location matching list |
+| `BANGLADESH_DIVISIONS` | — | 10 entries | Division-level matching list |
+| `ACCIDENT_TYPES` | — | 30+ patterns | Keyword list for type classification |
+
+**Environment files** provide pre-configured defaults:
+
+| File | Purpose |
+|------|---------|
+| `.env.development` | Dev defaults: `APP_ENV=development`, `LOG_LEVEL=DEBUG`, `CORS_ORIGINS=*` |
+| `.env.production` | Prod defaults: `APP_ENV=production`, `LOG_LEVEL=WARNING`, restricted CORS |
+| `.env.local` | Personal overrides (git-ignored) |
 
 ### API Layer (Routes)
 
@@ -593,26 +625,219 @@ Everything is served from a single process on a single port.
 
 ---
 
+## Containerised Deployment
+
+The project includes a complete Docker-based deployment pipeline with separate dev and prod configurations.
+
+### Dockerfile (Multi-Stage Build)
+
+**File:** `Dockerfile`
+
+Uses a two-stage build to keep the final image lean:
+
+```
+┌──────────────────────────────────────────────────┐
+│  Stage 1: "frontend"  (node:22-alpine)           │
+│                                                  │
+│  WORKDIR /build/frontend                         │
+│  COPY frontend/package*.json → npm ci            │
+│  COPY frontend/ → npm run build                  │
+│  Output: /build/static/dist/                     │
+└──────────────────────┬───────────────────────────┘
+                       │ COPY --from=frontend
+                       ▼
+┌──────────────────────────────────────────────────┐
+│  Stage 2: "runtime"  (python:3.13-slim)          │
+│                                                  │
+│  WORKDIR /app                                    │
+│  COPY requirements.txt → pip install             │
+│  COPY app/, run.py, static/dist/ (from stage 1)  │
+│                                                  │
+│  ENV APP_ENV=production                          │
+│  ENV PYTHONUNBUFFERED=1                          │
+│  EXPOSE 8000                                     │
+│  HEALTHCHECK → curl /api/overview                │
+│  CMD ["python", "run.py"]                        │
+└──────────────────────────────────────────────────┘
+```
+
+The final image contains only Python runtime + pip deps + compiled frontend assets — no Node.js, no source `.jsx` files, no `node_modules`.
+
+### Docker Compose — Dev
+
+**File:** `docker-compose.dev.yml`
+
+```yaml
+services:
+  app:
+    container_name: traffic-insight-dev
+    build: .
+    env_file: .env.development
+    ports: 8000:8000
+    volumes:
+      - ./app:/app/app:ro          # live code mount
+      - ./run.py:/app/run.py:ro    # live entry point
+      - dev-data:/app/data         # persistent DB
+    restart: unless-stopped
+```
+
+**Key features:**
+- Source code is bind-mounted read-only, so changes to `app/` or `run.py` take effect on container restart without rebuilding the image.
+- Database is stored in a named volume (`dev-data`) that persists across container recreations.
+- Uses `.env.development` (debug logging, CORS=*, Swagger enabled).
+
+### Docker Compose — Prod
+
+**File:** `docker-compose.prod.yml`
+
+```yaml
+services:
+  app:
+    container_name: traffic-insight-prod
+    build: .
+    env_file: .env.production
+    ports: 80:8000
+    volumes:
+      - prod-data:/app/data        # persistent DB
+    restart: always
+    healthcheck:
+      test: curl -f http://localhost:8000/api/overview
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+```
+
+**Key features:**
+- Maps to port **80** (standard HTTP).
+- `restart: always` ensures the container recovers from crashes and host reboots.
+- Built-in health check pings `/api/overview` every 60 seconds.
+- No source mounts — code is baked into the image for reproducibility.
+- Uses `.env.production` (WARNING logging, restricted CORS, Swagger disabled).
+
+### Makefile Targets
+
+**File:** `Makefile`
+
+Provides convenience commands for all workflows:
+
+| Target | Command | Effect |
+|--------|---------|--------|
+| `make help` | — | List all available targets |
+| `make install` | `pip install` + `npm install` | Install all dependencies |
+| `make build-frontend` | `npm run build` | Build React into `static/dist/` |
+| `make run-local` | `APP_ENV=development python run.py` | Run locally without Docker |
+| `make dev` | `docker compose -f dev.yml up --build` | Start dev container (foreground) |
+| `make dev-d` | `docker compose -f dev.yml up --build -d` | Start dev container (detached) |
+| `make dev-stop` | `docker compose -f dev.yml down` | Stop dev container |
+| `make dev-logs` | `docker compose -f dev.yml logs -f` | Tail dev logs |
+| `make prod` | `docker compose -f prod.yml up --build -d` | Start prod container |
+| `make prod-stop` | `docker compose -f prod.yml down` | Stop prod container |
+| `make prod-logs` | `docker compose -f prod.yml logs -f` | Tail prod logs |
+| `make prod-restart` | `docker compose -f prod.yml restart` | Restart prod |
+| `make status` | `docker ps --filter name=traffic-insight` | Show running containers |
+| `make shell-dev` | `docker exec -it ... /bin/sh` | Shell into dev container |
+| `make shell-prod` | `docker exec -it ... /bin/sh` | Shell into prod container |
+| `make db-backup` | `docker cp ...` | Copy prod DB to `backups/` |
+| `make clean` | `docker compose down -v` + `rm` | Tear down everything |
+
+### Deployment Flow Diagram
+
+```
+  Developer Machine                    Server / Cloud
+  ─────────────────                    ──────────────
+
+  ┌───────────────┐
+  │  make run-    │   Local dev
+  │  local        │   (no Docker)
+  └───────┬───────┘
+          │
+          │  Code changes
+          ▼
+  ┌───────────────┐
+  │  make dev     │   Docker dev
+  │  port 8000    │   (volume mounts,
+  │               │    debug logging)
+  └───────┬───────┘
+          │
+          │  git push → PR → merge
+          ▼
+  ┌───────────────┐   ┌───────────────┐
+  │  CI Pipeline  │──▶│  make prod    │   Docker prod
+  │  (lint, test) │   │  port 80      │   (baked image,
+  └───────────────┘   │  healthcheck  │    restart: always)
+                      └───────────────┘
+```
+
+---
+
+## Environment Configuration
+
+The application adapts its behaviour based on the `APP_ENV` environment variable:
+
+```
+                     APP_ENV
+                       │
+          ┌────────────┼────────────┐
+          ▼                         ▼
+    "development"              "production"
+          │                         │
+    DEBUG = True               DEBUG = False
+          │                         │
+    ┌─────┴──────┐            ┌─────┴──────┐
+    │ LOG: DEBUG │            │ LOG: WARN  │
+    │ CORS: *   │            │ CORS: url  │
+    │ Swagger ✅ │            │ Swagger ❌  │
+    │ Reload ✅  │            │ Reload ❌   │
+    │ Port 8000 │            │ Port 80    │
+    └────────────┘            └────────────┘
+```
+
+**Config file cascade:**
+
+1. Hardcoded defaults in `app/config.py`
+2. Overridden by `.env.development` or `.env.production` (loaded by Docker Compose `env_file`)
+3. Overridden by `.env.local` (personal, git-ignored)
+4. Overridden by explicit `ENV` vars set in shell or `docker run -e`
+
+---
+
 ## Development vs Production
 
 | Aspect | Development | Production |
 |--------|-------------|------------|
+| **APP_ENV** | `development` | `production` |
+| **DEBUG** | `True` | `False` |
+| **Logging** | `DEBUG` level | `WARNING` level |
+| **Swagger/ReDoc** | ✅ Available at `/docs`, `/redoc` | ❌ Disabled |
+| **CORS** | `*` (all origins) | Restricted to specific domain(s) |
 | **Frontend server** | Vite dev server (port 3000) | None — FastAPI serves the build |
-| **Backend server** | FastAPI + Uvicorn (port 8000) | Same |
+| **Backend server** | FastAPI + Uvicorn (port 8000) | Same (mapped to port 80 via Docker) |
 | **API routing** | Vite proxy: `/api` → `localhost:8000` | Same-origin, no proxy needed |
 | **Hot reload (frontend)** | ✅ Vite HMR | ❌ Must rebuild (`npm run build`) |
-| **Hot reload (backend)** | ✅ Uvicorn `--reload` | Typically disabled |
-| **Browser URL** | `http://localhost:3000` | `http://localhost:8000` |
+| **Hot reload (backend)** | ✅ Uvicorn `--reload` | ❌ Disabled |
+| **Browser URL** | `http://localhost:3000` (Vite) or `:8000` | `http://localhost` (port 80) |
 | **JS bundle** | Unbundled ES modules | Single minified bundle (~667 KB) |
+| **Container** | `docker-compose.dev.yml` (volume mounts) | `docker-compose.prod.yml` (baked image) |
+| **Restart policy** | `unless-stopped` | `always` |
+| **Health check** | — | `/api/overview` every 60s |
 
-### Two-terminal dev workflow:
+### Development workflows:
 
 ```bash
-# Terminal 1 — Backend
-python run.py                  # FastAPI on :8000
-
-# Terminal 2 — Frontend (hot reload)
+# Option A — Fully local (no Docker)
+make run-local                 # FastAPI on :8000 with DEBUG=True
 cd frontend && npm run dev     # Vite on :3000, proxies /api to :8000
+
+# Option B — Docker dev
+make dev                       # Builds image, starts on :8000 with volume mounts
+```
+
+### Production deployment:
+
+```bash
+make prod                      # Builds image, starts on :80 with healthcheck
+make db-backup                 # Backup database before upgrades
 ```
 
 ---
