@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -62,7 +62,7 @@ function MapLayers({ data, mode }) {
           <b>Location:</b> ${acc.district || acc.location_raw || 'Unknown'}<br>
           <b>Deaths:</b> <span style="color:red">${acc.deaths || 0}</span> |
           <b>Injured:</b> <span style="color:orange">${acc.injuries || 0}</span><br>
-          ${acc.summary ? `<p style="margin-top:6px;font-size:11px;color:#555">${acc.summary.substring(0, 150)}...</p>` : ''}
+          ${acc.summary ? `<p style="margin-top:6px;font-size:11px;color:#555">${acc.summary.substring(0, 150)}${acc.summary.length > 150 ? '...' : ''}</p>` : ''}
           ${acc.article_url ? `<a href="${acc.article_url}" target="_blank" style="font-size:11px">Read article →</a>` : ''}
         </div>
       `);
@@ -82,8 +82,8 @@ function MapLayers({ data, mode }) {
     else map.addLayer(heat);
 
     return () => {
-      if (clusterRef.current) map.removeLayer(clusterRef.current);
-      if (heatRef.current) map.removeLayer(heatRef.current);
+      if (clusterRef.current) { map.removeLayer(clusterRef.current); clusterRef.current = null; }
+      if (heatRef.current) { map.removeLayer(heatRef.current); heatRef.current = null; }
     };
   }, [data, mode, map]);
 
@@ -185,7 +185,7 @@ export default function DangerMap() {
                             <td className="text-red">{dist.deaths}</td>
                             <td className="text-orange">{dist.injuries}</td>
                             <td style={{ color: sevColor(dist.accidents ? dist.deaths / dist.accidents : 0) }}>
-                              {dist.accidents ? (dist.deaths / dist.accidents).toFixed(2) : '0'}
+                              {dist.accidents ? (dist.deaths / dist.accidents).toFixed(2) : '0.00'}
                             </td>
                           </tr>
                         ))}
