@@ -44,7 +44,7 @@ This application scrapes, processes, and visualizes road accident data to identi
 
 | Component | Technology |
 |-----------|-----------|
-| **Backend** | Python 3.14, FastAPI 0.115 |
+| **Backend** | Python 3.14, FastAPI 0.115, CORS middleware |
 | **Frontend** | React 19 + Vite 7 |
 | **Routing** | React Router v7 |
 | **Charts** | Chart.js + react-chartjs-2 |
@@ -52,7 +52,7 @@ This application scrapes, processes, and visualizes road accident data to identi
 | **Icons** | react-icons (Font Awesome) |
 | **Scraper** | BeautifulSoup4, Requests, lxml |
 | **NLP/Extraction** | Regex-based entity extraction |
-| **Database** | SQLite (WAL mode) |
+| **Database** | SQLite (WAL mode, context-managed connections) |
 | **Scheduler** | APScheduler (6-hour interval) |
 | **Theme** | CSS custom properties + ThemeProvider context |
 
@@ -293,7 +293,7 @@ Full searchable table of every extracted accident with columns for date, type, l
 | `GET` | `/api/youtube-videos` | YouTube search results (cached 30min) |
 | `GET` | `/api/alerts/high-severity` | Recent high-severity alerts |
 | `GET` | `/api/export/csv` | CSV download (supports date/district filters) |
-| `POST` | `/api/scrape` | Trigger manual scrape |
+| `POST` | `/api/scrape` | Trigger manual scrape (non-blocking) |
 | `GET` | `/api/scrape-logs` | Recent scrape history |
 
 ---
@@ -308,11 +308,38 @@ Full searchable table of every extracted accident with columns for date, type, l
    - **Casualties** (death and injury counts from text)
    - **Vehicles involved** (bus, truck, motorcycle, etc.)
 
-3. **Storage**: Structured data is stored in SQLite (WAL mode) with proper indexing for fast queries
+3. **Storage**: Structured data is stored in SQLite (WAL mode) with proper indexing for fast queries. All database access uses context-managed connections to prevent leaks.
 
 4. **Analysis**: Backend computes forecasts, clusters, YoY comparisons, danger indices, and time patterns from the raw data
 
 5. **Visualization**: The React frontend fetches data via REST APIs and renders interactive charts, maps, heatmaps, and tables
+
+---
+
+## Backend Robustness
+
+The backend has been hardened with the following reliability improvements:
+
+### Connection Safety
+- **Context-managed database access** — All database operations use a `get_db()` context manager (`with db.get_db() as conn:`) that guarantees connections are closed on both success and failure, with automatic commit/rollback
+- **No connection leaks** — All 20+ route handlers and database functions migrated from manual `get_connection()`/`close()` to context managers
+
+### Scraper Reliability
+- **No silent date corruption** — If the published date cannot be parsed, it is stored as `None` (with a warning log) instead of silently defaulting to today's date
+- **Early termination on duplicates** — If all articles on a page already exist in the database, pagination stops early instead of continuing to fetch more duplicate pages
+- **Extractor reuse** — A single `AccidentExtractor` instance is created per scrape cycle instead of per article, reducing overhead
+
+### Server Hardening
+- **Graceful SPA fallback** — If the React frontend hasn't been built yet, the SPA catch-all returns a 503 JSON response with build instructions instead of crashing with a 500 error
+- **CORS middleware** — Configured for cross-origin access during development and external API consumption
+- **Non-blocking scrape** — The `/api/scrape` POST endpoint runs the synchronous scraper in a thread pool via `run_in_executor()`, preventing it from blocking the async event loop
+- **Thread-safe YouTube cache** — The YouTube video cache uses a `threading.Lock()` for safe concurrent access
+
+### Data Quality
+- **Division name normalization** — Handles variant spellings (Chattogram→Chittagong, Barishal→Barisal) consistently via alias mapping
+- **Boilerplate-filtered summaries** — Article summaries now filter out copyright notices, "follow us" prompts, and other boilerplate text
+- **Additional database indexes** — Added indexes on `division` and `article_id` columns for faster aggregation queries
+- **Single initialization** — Database schema is initialized once during server startup (via the lifespan manager) instead of redundantly at module import time
 
 ---
 

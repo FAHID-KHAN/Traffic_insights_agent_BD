@@ -135,6 +135,19 @@ _DIVISION_MAP = {
     "Mymensingh": ["Mymensingh", "Jamalpur", "Netrokona", "Sherpur"],
 }
 
+# Build reverse lookup: also map alternate division names
+_DIVISION_ALIASES = {
+    "Chattogram": "Chittagong",
+    "Barishal": "Barisal",
+}
+
+
+def _normalize_division(name: str) -> Optional[str]:
+    """Normalize division names to canonical form."""
+    if name in _DIVISION_MAP:
+        return name
+    return _DIVISION_ALIASES.get(name)
+
 
 class AccidentExtractor:
     """Extracts structured accident data from article text using NLP / regex."""
@@ -227,7 +240,8 @@ class AccidentExtractor:
 
         for division in BANGLADESH_DIVISIONS:
             if re.search(r"\b" + re.escape(division) + r"\b", content, re.IGNORECASE):
-                result["division"] = division
+                # Normalize division aliases (e.g. "Chattogram" → "Chittagong")
+                result["division"] = _normalize_division(division) or division
                 break
 
         if result["district"] and not result["division"]:
@@ -253,7 +267,8 @@ class AccidentExtractor:
         for division, districts in _DIVISION_MAP.items():
             if district in districts:
                 return division
-        return None
+        # Try aliases
+        return _DIVISION_ALIASES.get(district)
 
     def _extract_casualties(self, content: str) -> Dict:
         deaths, injuries = 0, 0
@@ -329,11 +344,24 @@ class AccidentExtractor:
 
     @staticmethod
     def _generate_summary(content: str, max_length: int = 200) -> str:
+        # Filter out common boilerplate/copyright lines
+        boilerplate_patterns = [
+            r"©|copyright|all rights reserved|daily star|star digital",
+            r"^photo\s*:", r"^file\s+photo", r"^star\s+file",
+            r"published\s+at\s+\d", r"updated\s+at\s+\d",
+            r"follow\s+us\s+on", r"subscribe\s+to", r"click\s+here",
+        ]
         sentences = re.split(r"(?<=[.!?])\s+", content)
         summary = ""
-        for s in sentences[:3]:
-            if len(summary) + len(s) <= max_length:
-                summary += s + " "
+        for s in sentences[:5]:  # check more sentences for a good summary
+            s_stripped = s.strip()
+            if len(s_stripped) < 15:
+                continue
+            # Skip boilerplate
+            if any(re.search(bp, s_stripped, re.IGNORECASE) for bp in boilerplate_patterns):
+                continue
+            if len(summary) + len(s_stripped) <= max_length:
+                summary += s_stripped + " "
             else:
                 break
         return summary.strip() or content[:max_length].strip()
@@ -342,9 +370,8 @@ class AccidentExtractor:
 def reprocess_all_articles():
     """Re-process all existing articles through the extractor."""
     from app import database as db
-    conn = db.get_connection()
-    articles = conn.execute("SELECT id, content, published_date FROM articles").fetchall()
-    conn.close()
+    with db.get_db() as conn:
+        articles = conn.execute("SELECT id, content, published_date FROM articles").fetchall()
 
     extractor = AccidentExtractor()
     processed = 0

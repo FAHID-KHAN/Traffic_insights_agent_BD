@@ -186,7 +186,7 @@ class DailyStarScraper:
                     if pub_date:
                         break
 
-        result["published_date"] = pub_date or date.today()
+        result["published_date"] = pub_date  # None if unparseable — don't default to today
 
         # Article body
         body_selectors = [
@@ -218,9 +218,12 @@ class DailyStarScraper:
 
     def run_scrape(self) -> Dict:
         """Run a full scrape cycle."""
+        from app.extractor import AccidentExtractor
+
         log_id = start_scrape_log()
         total_found = 0
         total_new = 0
+        extractor = AccidentExtractor()  # reuse one instance
 
         try:
             for page in range(MAX_PAGES_PER_SCRAPE):
@@ -231,29 +234,47 @@ class DailyStarScraper:
                     logger.info(f"No articles on page {page}, stopping pagination")
                     break
 
+                page_new = 0
+                page_dupes = 0
                 for article_info in article_links:
                     url = article_info["url"]
                     if article_exists(url):
+                        page_dupes += 1
                         continue
 
                     time.sleep(REQUEST_DELAY)
                     article_data = self.scrape_article(url)
                     if article_data and article_data.get("content"):
+                        # Use published_date from article, fall back to listing title hint, then None
+                        pub_date = article_data.get("published_date")
+                        if pub_date is None:
+                            logger.warning(
+                                f"Could not parse date for article: {url} — storing without date"
+                            )
+
                         article_id = insert_article(
                             url=article_data["url"],
                             title=article_data.get("title", article_info["title"]),
                             content=article_data["content"],
-                            published_date=article_data.get("published_date"),
+                            published_date=pub_date,
                         )
+                        page_new += 1
                         total_new += 1
                         logger.info(f"Saved article #{article_id}: {article_data.get('title', '')[:60]}")
 
-                        from app.extractor import AccidentExtractor
-                        AccidentExtractor().process_article(
+                        extractor.process_article(
                             article_id,
                             article_data["content"],
-                            article_data.get("published_date"),
+                            pub_date,
                         )
+
+                # Early termination: if all articles on this page were duplicates, stop
+                if page_dupes > 0 and page_new == 0:
+                    logger.info(
+                        f"All {page_dupes} articles on page {page} already exist, "
+                        f"stopping pagination early"
+                    )
+                    break
 
                 time.sleep(REQUEST_DELAY)
 

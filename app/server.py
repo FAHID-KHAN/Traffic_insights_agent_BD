@@ -7,8 +7,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app import database as db
 from app.config import STATIC_DIR
@@ -46,6 +47,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # CORS middleware — allows dev proxy and external access
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     # API routes
     application.include_router(api_router)
 
@@ -57,6 +67,16 @@ def create_app() -> FastAPI:
     # SPA catch-all: serve React index.html for all non-API routes
     @application.get("/{path:path}")
     async def serve_react_spa(path: str = ""):
-        return FileResponse(os.path.join(REACT_DIST, "index.html"))
+        index_path = os.path.join(REACT_DIST, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Frontend not built yet. "
+                          "Run 'cd frontend && npm run build' first, "
+                          "or use the API at /api/ and /docs."
+            },
+        )
 
     return application

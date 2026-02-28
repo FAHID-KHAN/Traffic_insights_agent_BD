@@ -4,6 +4,7 @@ Separated from server setup for clarity.
 """
 import logging
 import re
+import threading
 from datetime import date, datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
@@ -26,60 +27,57 @@ async def get_overview(
 ):
     """Get overall statistics overview, optionally filtered by date range."""
     try:
-        conn = db.get_connection()
+        with db.get_db() as conn:
+            if start and end:
+                row = conn.execute(
+                    """SELECT COUNT(*) as total_accidents,
+                              COALESCE(SUM(deaths), 0) as total_deaths,
+                              COALESCE(SUM(injuries), 0) as total_injuries
+                       FROM accidents
+                       WHERE accident_date BETWEEN ? AND ?""",
+                    (start, end),
+                ).fetchone()
+                total_articles = conn.execute(
+                    "SELECT COUNT(*) as c FROM articles WHERE published_date BETWEEN ? AND ?",
+                    (start, end),
+                ).fetchone()["c"]
+            else:
+                row = conn.execute(
+                    """SELECT COUNT(*) as total_accidents,
+                              COALESCE(SUM(deaths), 0) as total_deaths,
+                              COALESCE(SUM(injuries), 0) as total_injuries
+                       FROM accidents"""
+                ).fetchone()
+                total_articles = conn.execute(
+                    "SELECT COUNT(*) as c FROM articles"
+                ).fetchone()["c"]
 
-        if start and end:
-            row = conn.execute(
-                """SELECT COUNT(*) as total_accidents,
-                          COALESCE(SUM(deaths), 0) as total_deaths,
-                          COALESCE(SUM(injuries), 0) as total_injuries
-                   FROM accidents
-                   WHERE accident_date BETWEEN ? AND ?""",
-                (start, end),
+            today = date.today().isoformat()
+            today_row = conn.execute(
+                """SELECT COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents WHERE accident_date = ?""",
+                (today,),
             ).fetchone()
-            total_articles = conn.execute(
-                "SELECT COUNT(*) as c FROM articles WHERE published_date BETWEEN ? AND ?",
-                (start, end),
-            ).fetchone()["c"]
-        else:
-            row = conn.execute(
-                """SELECT COUNT(*) as total_accidents,
-                          COALESCE(SUM(deaths), 0) as total_deaths,
-                          COALESCE(SUM(injuries), 0) as total_injuries
-                   FROM accidents"""
+
+            last_scrape = conn.execute(
+                "SELECT * FROM scrape_logs ORDER BY id DESC LIMIT 1"
             ).fetchone()
-            total_articles = conn.execute(
-                "SELECT COUNT(*) as c FROM articles"
-            ).fetchone()["c"]
 
-        today = date.today().isoformat()
-        today_row = conn.execute(
-            """SELECT COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents WHERE accident_date = ?""",
-            (today,),
-        ).fetchone()
-
-        last_scrape = conn.execute(
-            "SELECT * FROM scrape_logs ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-
-        conn.close()
-
-        return {
-            "total_accidents": row["total_accidents"],
-            "total_deaths": row["total_deaths"],
-            "total_injuries": row["total_injuries"],
-            "total_articles": total_articles,
-            "today": {
-                "date": today,
-                "accidents": today_row["accidents"],
-                "deaths": today_row["deaths"],
-                "injuries": today_row["injuries"],
-            },
-            "last_scrape": dict(last_scrape) if last_scrape else None,
-        }
+            return {
+                "total_accidents": row["total_accidents"],
+                "total_deaths": row["total_deaths"],
+                "total_injuries": row["total_injuries"],
+                "total_articles": total_articles,
+                "today": {
+                    "date": today,
+                    "accidents": today_row["accidents"],
+                    "deaths": today_row["deaths"],
+                    "injuries": today_row["injuries"],
+                },
+                "last_scrape": dict(last_scrape) if last_scrape else None,
+            }
     except Exception as e:
         logger.error(f"Error getting overview: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -116,21 +114,19 @@ async def get_danger_zones(
     end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
 ):
     if start and end:
-        conn = db.get_connection()
-        rows = conn.execute(
-            """SELECT district, division, COUNT(*) as total_accidents,
-                      SUM(deaths) as total_deaths, SUM(injuries) as total_injuries,
-                      AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
-               FROM accidents
-               WHERE district IS NOT NULL AND accident_date BETWEEN ? AND ?
-               GROUP BY district
-               ORDER BY total_accidents DESC
-               LIMIT ?""",
-            (start, end, limit),
-        ).fetchall()
-        result = [dict(r) for r in rows]
-        conn.close()
-        return result
+        with db.get_db() as conn:
+            rows = conn.execute(
+                """SELECT district, division, COUNT(*) as total_accidents,
+                          SUM(deaths) as total_deaths, SUM(injuries) as total_injuries,
+                          AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
+                   FROM accidents
+                   WHERE district IS NOT NULL AND accident_date BETWEEN ? AND ?
+                   GROUP BY district
+                   ORDER BY total_accidents DESC
+                   LIMIT ?""",
+                (start, end, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
     return db.get_danger_zones(limit)
 
 
@@ -160,8 +156,11 @@ async def get_scrape_logs(limit: int = Query(20, ge=1, le=100)):
 
 @router.post("/scrape")
 async def trigger_scrape():
+    """Trigger a scrape cycle. Runs in a thread pool to avoid blocking the event loop."""
+    import asyncio
     try:
-        result = run_scraper()
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, run_scraper)
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Scrape failed: {e}")
@@ -175,27 +174,27 @@ async def get_latest_articles(
     limit: int = Query(12, ge=1, le=50),
 ):
     """Return the most recent articles with aggregate accident stats."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT ar.id, ar.url, ar.title, ar.published_date, ar.source,
-                  COUNT(a.id) as accident_count,
-                  COALESCE(SUM(a.deaths), 0) as total_deaths,
-                  COALESCE(SUM(a.injuries), 0) as total_injuries
-           FROM articles ar
-           JOIN accidents a ON a.article_id = ar.id
-           WHERE ar.title IS NOT NULL AND ar.title != ''
-           GROUP BY ar.id
-           ORDER BY ar.published_date DESC, ar.id DESC
-           LIMIT ?""",
-        (limit,),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT ar.id, ar.url, ar.title, ar.published_date, ar.source,
+                      COUNT(a.id) as accident_count,
+                      COALESCE(SUM(a.deaths), 0) as total_deaths,
+                      COALESCE(SUM(a.injuries), 0) as total_injuries
+               FROM articles ar
+               JOIN accidents a ON a.article_id = ar.id
+               WHERE ar.title IS NOT NULL AND ar.title != ''
+               GROUP BY ar.id
+               ORDER BY ar.published_date DESC, ar.id DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ─── YouTube Video Feed ────────────────────────────────────────
 
 _yt_cache: dict = {"videos": [], "ts": 0}
+_yt_lock = threading.Lock()
 
 @router.get("/youtube-videos")
 async def get_youtube_videos(
@@ -208,8 +207,9 @@ async def get_youtube_videos(
     import time
     now = time.time()
     # Return cached if fresh (30 min)
-    if _yt_cache["videos"] and (now - _yt_cache["ts"]) < 1800:
-        return _yt_cache["videos"][:limit]
+    with _yt_lock:
+        if _yt_cache["videos"] and (now - _yt_cache["ts"]) < 1800:
+            return _yt_cache["videos"][:limit]
 
     queries = [
         "bangladesh road accident news",
@@ -269,8 +269,9 @@ async def get_youtube_videos(
             continue
 
     if videos:
-        _yt_cache["videos"] = videos
-        _yt_cache["ts"] = now
+        with _yt_lock:
+            _yt_cache["videos"] = videos
+            _yt_cache["ts"] = now
 
     return videos[:limit]
 
@@ -286,51 +287,50 @@ async def compare_monthly(
     year2: int = Query(...),
 ):
     """Compare stats for the same month across two years."""
-    conn = db.get_connection()
-    results = {}
-    for year in (year1, year2):
-        prefix = f"{year}-{month:02d}"
-        row = conn.execute(
-            """SELECT COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents
-               WHERE strftime('%Y-%m', accident_date) = ?""",
-            (prefix,),
-        ).fetchone()
-        by_type = conn.execute(
-            """SELECT accident_type, COUNT(*) as count
-               FROM accidents
-               WHERE strftime('%Y-%m', accident_date) = ?
-               GROUP BY accident_type ORDER BY count DESC""",
-            (prefix,),
-        ).fetchall()
-        by_district = conn.execute(
-            """SELECT district, COUNT(*) as count,
-                      SUM(deaths) as deaths
-               FROM accidents
-               WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
-               GROUP BY district ORDER BY count DESC LIMIT 10""",
-            (prefix,),
-        ).fetchall()
-        daily = conn.execute(
-            """SELECT CAST(strftime('%d', accident_date) AS INTEGER) as day,
-                      COUNT(*) as accidents, SUM(deaths) as deaths
-               FROM accidents
-               WHERE strftime('%Y-%m', accident_date) = ?
-               GROUP BY day ORDER BY day""",
-            (prefix,),
-        ).fetchall()
-        results[str(year)] = {
-            "accidents": row["accidents"],
-            "deaths": row["deaths"],
-            "injuries": row["injuries"],
-            "by_type": [dict(r) for r in by_type],
-            "by_district": [dict(r) for r in by_district],
-            "daily": [dict(r) for r in daily],
-        }
-    conn.close()
-    return results
+    with db.get_db() as conn:
+        results = {}
+        for year in (year1, year2):
+            prefix = f"{year}-{month:02d}"
+            row = conn.execute(
+                """SELECT COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y-%m', accident_date) = ?""",
+                (prefix,),
+            ).fetchone()
+            by_type = conn.execute(
+                """SELECT accident_type, COUNT(*) as count
+                   FROM accidents
+                   WHERE strftime('%Y-%m', accident_date) = ?
+                   GROUP BY accident_type ORDER BY count DESC""",
+                (prefix,),
+            ).fetchall()
+            by_district = conn.execute(
+                """SELECT district, COUNT(*) as count,
+                          SUM(deaths) as deaths
+                   FROM accidents
+                   WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
+                   GROUP BY district ORDER BY count DESC LIMIT 10""",
+                (prefix,),
+            ).fetchall()
+            daily = conn.execute(
+                """SELECT CAST(strftime('%d', accident_date) AS INTEGER) as day,
+                          COUNT(*) as accidents, SUM(deaths) as deaths
+                   FROM accidents
+                   WHERE strftime('%Y-%m', accident_date) = ?
+                   GROUP BY day ORDER BY day""",
+                (prefix,),
+            ).fetchall()
+            results[str(year)] = {
+                "accidents": row["accidents"],
+                "deaths": row["deaths"],
+                "injuries": row["injuries"],
+                "by_type": [dict(r) for r in by_type],
+                "by_district": [dict(r) for r in by_district],
+                "daily": [dict(r) for r in daily],
+            }
+        return results
 
 
 @router.get("/compare/yearly")
@@ -339,34 +339,33 @@ async def compare_yearly(
     year2: int = Query(...),
 ):
     """Compare full-year stats across two years."""
-    conn = db.get_connection()
-    results = {}
-    for year in (year1, year2):
-        row = conn.execute(
-            """SELECT COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?""",
-            (str(year),),
-        ).fetchone()
-        by_month = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
-                      COUNT(*) as accidents,
-                      SUM(deaths) as deaths, SUM(injuries) as injuries
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?
-               GROUP BY month ORDER BY month""",
-            (str(year),),
-        ).fetchall()
-        results[str(year)] = {
-            "accidents": row["accidents"],
-            "deaths": row["deaths"],
-            "injuries": row["injuries"],
-            "by_month": [dict(r) for r in by_month],
-        }
-    conn.close()
-    return results
+    with db.get_db() as conn:
+        results = {}
+        for year in (year1, year2):
+            row = conn.execute(
+                """SELECT COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?""",
+                (str(year),),
+            ).fetchone()
+            by_month = conn.execute(
+                """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+                          COUNT(*) as accidents,
+                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?
+                   GROUP BY month ORDER BY month""",
+                (str(year),),
+            ).fetchall()
+            results[str(year)] = {
+                "accidents": row["accidents"],
+                "deaths": row["deaths"],
+                "injuries": row["injuries"],
+                "by_month": [dict(r) for r in by_month],
+            }
+        return results
 
 
 # ─── Division-level Stats ──────────────────────────────────────
@@ -374,37 +373,36 @@ async def compare_yearly(
 @router.get("/divisions")
 async def get_division_stats():
     """Aggregated stats per division with district breakdown."""
-    conn = db.get_connection()
-    divs = conn.execute(
-        """SELECT division, COUNT(*) as total_accidents,
-                  COALESCE(SUM(deaths), 0) as total_deaths,
-                  COALESCE(SUM(injuries), 0) as total_injuries,
-                  AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
-           FROM accidents
-           WHERE division IS NOT NULL AND division != ''
-           GROUP BY division
-           ORDER BY total_accidents DESC"""
-    ).fetchall()
-    result = []
-    for d in divs:
-        districts = conn.execute(
-            """SELECT district, COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
+    with db.get_db() as conn:
+        divs = conn.execute(
+            """SELECT division, COUNT(*) as total_accidents,
+                      COALESCE(SUM(deaths), 0) as total_deaths,
+                      COALESCE(SUM(injuries), 0) as total_injuries,
+                      AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
                FROM accidents
-               WHERE division = ? AND district IS NOT NULL
-               GROUP BY district ORDER BY accidents DESC""",
-            (d["division"],),
+               WHERE division IS NOT NULL AND division != ''
+               GROUP BY division
+               ORDER BY total_accidents DESC"""
         ).fetchall()
-        acc = d["total_accidents"]
-        deaths = d["total_deaths"]
-        result.append({
-            **dict(d),
-            "fatality_rate": round(deaths / acc, 2) if acc > 0 else 0,
-            "districts": [dict(r) for r in districts],
-        })
-    conn.close()
-    return result
+        result = []
+        for d in divs:
+            districts = conn.execute(
+                """SELECT district, COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE division = ? AND district IS NOT NULL
+                   GROUP BY district ORDER BY accidents DESC""",
+                (d["division"],),
+            ).fetchall()
+            acc = d["total_accidents"]
+            deaths = d["total_deaths"]
+            result.append({
+                **dict(d),
+                "fatality_rate": round(deaths / acc, 2) if acc > 0 else 0,
+                "districts": [dict(r) for r in districts],
+            })
+        return result
 
 
 # ─── Fatality / Danger Index ───────────────────────────────────
@@ -414,23 +412,22 @@ async def get_danger_index(
     limit: int = Query(30, ge=1, le=100),
 ):
     """Danger index: deaths-per-accident ratio per district, min 2 accidents."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT district, division, COUNT(*) as total_accidents,
-                  COALESCE(SUM(deaths), 0) as total_deaths,
-                  COALESCE(SUM(injuries), 0) as total_injuries,
-                  ROUND(CAST(COALESCE(SUM(deaths), 0) AS REAL) / COUNT(*), 2)
-                      as fatality_rate,
-                  AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
-           FROM accidents
-           WHERE district IS NOT NULL
-           GROUP BY district
-           HAVING COUNT(*) >= 2
-           ORDER BY fatality_rate DESC, total_deaths DESC
-           LIMIT ?""",
-        (limit,),
-    ).fetchall()
-    conn.close()
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT district, division, COUNT(*) as total_accidents,
+                      COALESCE(SUM(deaths), 0) as total_deaths,
+                      COALESCE(SUM(injuries), 0) as total_injuries,
+                      ROUND(CAST(COALESCE(SUM(deaths), 0) AS REAL) / COUNT(*), 2)
+                          as fatality_rate,
+                      AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
+               FROM accidents
+               WHERE district IS NOT NULL
+               GROUP BY district
+               HAVING COUNT(*) >= 2
+               ORDER BY fatality_rate DESC, total_deaths DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
 
     result = []
     for r in rows:
@@ -453,20 +450,19 @@ async def search_accidents(
     q: str = Query(..., min_length=2),
     limit: int = Query(50, ge=1, le=200),
 ):
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT a.*, ar.title as article_title, ar.url as article_url
-           FROM accidents a
-           JOIN articles ar ON a.article_id = ar.id
-           WHERE a.district LIKE ? OR a.location_raw LIKE ?
-                 OR a.accident_type LIKE ? OR a.summary LIKE ?
-                 OR ar.title LIKE ?
-           ORDER BY a.accident_date DESC
-           LIMIT ?""",
-        (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", limit),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT a.*, ar.title as article_title, ar.url as article_url
+               FROM accidents a
+               JOIN articles ar ON a.article_id = ar.id
+               WHERE a.district LIKE ? OR a.location_raw LIKE ?
+                     OR a.accident_type LIKE ? OR a.summary LIKE ?
+                     OR ar.title LIKE ?
+               ORDER BY a.accident_date DESC
+               LIMIT ?""",
+            (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 @router.get("/trend")
@@ -475,37 +471,36 @@ async def get_trend(
     start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
 ):
-    conn = db.get_connection()
-    if start and end:
-        rows = conn.execute(
-            """SELECT accident_date, COUNT(*) as accidents,
-                      SUM(deaths) as deaths, SUM(injuries) as injuries
-               FROM accidents
-               WHERE accident_date BETWEEN ? AND ?
-               GROUP BY accident_date
-               ORDER BY accident_date""",
-            (start, end),
-        ).fetchall()
-    elif days:
-        rows = conn.execute(
-            """SELECT accident_date, COUNT(*) as accidents,
-                      SUM(deaths) as deaths, SUM(injuries) as injuries
-               FROM accidents
-               WHERE accident_date >= date('now', ? || ' days')
-               GROUP BY accident_date
-               ORDER BY accident_date""",
-            (f"-{days}",),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """SELECT accident_date, COUNT(*) as accidents,
-                      SUM(deaths) as deaths, SUM(injuries) as injuries
-               FROM accidents
-               GROUP BY accident_date
-               ORDER BY accident_date"""
-        ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with db.get_db() as conn:
+        if start and end:
+            rows = conn.execute(
+                """SELECT accident_date, COUNT(*) as accidents,
+                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                   FROM accidents
+                   WHERE accident_date BETWEEN ? AND ?
+                   GROUP BY accident_date
+                   ORDER BY accident_date""",
+                (start, end),
+            ).fetchall()
+        elif days:
+            rows = conn.execute(
+                """SELECT accident_date, COUNT(*) as accidents,
+                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                   FROM accidents
+                   WHERE accident_date >= date('now', ? || ' days')
+                   GROUP BY accident_date
+                   ORDER BY accident_date""",
+                (f"-{days}",),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT accident_date, COUNT(*) as accidents,
+                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                   FROM accidents
+                   GROUP BY accident_date
+                   ORDER BY accident_date"""
+            ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ─── Advanced Search ────────────────────────────────────────────
@@ -521,57 +516,56 @@ async def search_advanced(
     limit: int = Query(100, ge=1, le=500),
 ):
     """Full-text search with optional district, type, severity, date filters."""
-    conn = db.get_connection()
-    clauses = []
-    params = []
+    with db.get_db() as conn:
+        clauses = []
+        params = []
 
-    if q:
-        clauses.append(
-            "(a.district LIKE ? OR a.location_raw LIKE ? OR a.accident_type LIKE ? "
-            "OR a.summary LIKE ? OR ar.title LIKE ?)"
-        )
-        like = f"%{q}%"
-        params.extend([like] * 5)
+        if q:
+            clauses.append(
+                "(a.district LIKE ? OR a.location_raw LIKE ? OR a.accident_type LIKE ? "
+                "OR a.summary LIKE ? OR ar.title LIKE ?)"
+            )
+            like = f"%{q}%"
+            params.extend([like] * 5)
 
-    if district:
-        clauses.append("a.district = ?")
-        params.append(district)
+        if district:
+            clauses.append("a.district = ?")
+            params.append(district)
 
-    if type:
-        clauses.append("a.accident_type LIKE ?")
-        params.append(f"%{type}%")
+        if type:
+            clauses.append("a.accident_type LIKE ?")
+            params.append(f"%{type}%")
 
-    if severity == "fatal":
-        clauses.append("a.deaths >= 1")
-    elif severity == "critical":
-        clauses.append("a.deaths >= 5")
-    elif severity == "mass":
-        clauses.append("a.deaths >= 10")
-    elif severity == "injury":
-        clauses.append("a.deaths = 0 AND a.injuries > 0")
-    elif severity == "none":
-        clauses.append("a.deaths = 0 AND a.injuries = 0")
+        if severity == "fatal":
+            clauses.append("a.deaths >= 1")
+        elif severity == "critical":
+            clauses.append("a.deaths >= 5")
+        elif severity == "mass":
+            clauses.append("a.deaths >= 10")
+        elif severity == "injury":
+            clauses.append("a.deaths = 0 AND a.injuries > 0")
+        elif severity == "none":
+            clauses.append("a.deaths = 0 AND a.injuries = 0")
 
-    if start:
-        clauses.append("a.accident_date >= ?")
-        params.append(start)
-    if end:
-        clauses.append("a.accident_date <= ?")
-        params.append(end)
+        if start:
+            clauses.append("a.accident_date >= ?")
+            params.append(start)
+        if end:
+            clauses.append("a.accident_date <= ?")
+            params.append(end)
 
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
-    rows = conn.execute(
-        f"""SELECT a.*, ar.title as article_title, ar.url as article_url
-            FROM accidents a
-            LEFT JOIN articles ar ON a.article_id = ar.id
-            {where}
-            ORDER BY a.accident_date DESC
-            LIMIT ?""",
-        (*params, limit),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+        rows = conn.execute(
+            f"""SELECT a.*, ar.title as article_title, ar.url as article_url
+                FROM accidents a
+                LEFT JOIN articles ar ON a.article_id = ar.id
+                {where}
+                ORDER BY a.accident_date DESC
+                LIMIT ?""",
+            (*params, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ─── High-Severity Alerts ──────────────────────────────────────
@@ -582,19 +576,18 @@ async def get_high_severity_alerts(
     min_deaths: int = Query(5, ge=1),
 ):
     """Return recent high-severity accidents (default: 5+ deaths in last 3 days)."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT id, accident_date, accident_type, district, division,
-                  location_raw, deaths, injuries, summary
-           FROM accidents
-           WHERE deaths >= ?
-             AND accident_date >= date('now', ? || ' days')
-           ORDER BY deaths DESC, accident_date DESC
-           LIMIT 5""",
-        (min_deaths, f"-{days}"),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, accident_date, accident_type, district, division,
+                      location_raw, deaths, injuries, summary
+               FROM accidents
+               WHERE deaths >= ?
+                 AND accident_date >= date('now', ? || ' days')
+               ORDER BY deaths DESC, accident_date DESC
+               LIMIT 5""",
+            (min_deaths, f"-{days}"),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ─── Trend Forecasting (Moving Average) ─────────────────────────
@@ -605,20 +598,19 @@ async def get_forecast(
     forecast_months: int = Query(3, ge=1, le=6, description="Months to forecast"),
 ):
     """Return monthly historical data with a simple moving-average forecast."""
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT strftime('%Y-%m', accident_date) as month,
-                  COUNT(*) as accidents,
-                  COALESCE(SUM(deaths), 0) as deaths,
-                  COALESCE(SUM(injuries), 0) as injuries
-           FROM accidents
-           WHERE accident_date IS NOT NULL
-           GROUP BY strftime('%Y-%m', accident_date)
-           ORDER BY month DESC
-           LIMIT ?""",
-        (months,),
-    ).fetchall()
-    conn.close()
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT strftime('%Y-%m', accident_date) as month,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE accident_date IS NOT NULL
+               GROUP BY strftime('%Y-%m', accident_date)
+               ORDER BY month DESC
+               LIMIT ?""",
+            (months,),
+        ).fetchall()
 
     history = [dict(r) for r in reversed(rows)]  # oldest first
 
@@ -679,64 +671,61 @@ async def get_time_patterns():
     Since articles don't include exact time, we compute day-of-week patterns
     and monthly distribution for a heatmap.
     """
-    conn = db.get_connection()
+    with db.get_db() as conn:
+        # Day-of-week distribution (0=Sunday .. 6=Saturday in SQLite strftime %w)
+        dow_rows = conn.execute(
+            """SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE accident_date IS NOT NULL
+               GROUP BY dow
+               ORDER BY dow"""
+        ).fetchall()
 
-    # Day-of-week distribution (0=Sunday .. 6=Saturday in SQLite strftime %w)
-    dow_rows = conn.execute(
-        """SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
-                  COUNT(*) as accidents,
-                  COALESCE(SUM(deaths), 0) as deaths,
-                  COALESCE(SUM(injuries), 0) as injuries
-           FROM accidents
-           WHERE accident_date IS NOT NULL
-           GROUP BY dow
-           ORDER BY dow"""
-    ).fetchall()
+        # Month-of-year distribution
+        moy_rows = conn.execute(
+            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE accident_date IS NOT NULL
+               GROUP BY month
+               ORDER BY month"""
+        ).fetchall()
 
-    # Month-of-year distribution
-    moy_rows = conn.execute(
-        """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
-                  COUNT(*) as accidents,
-                  COALESCE(SUM(deaths), 0) as deaths,
-                  COALESCE(SUM(injuries), 0) as injuries
-           FROM accidents
-           WHERE accident_date IS NOT NULL
-           GROUP BY month
-           ORDER BY month"""
-    ).fetchall()
+        # Month x Day-of-week grid for heatmap
+        grid_rows = conn.execute(
+            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+                      CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths
+               FROM accidents
+               WHERE accident_date IS NOT NULL
+               GROUP BY month, dow
+               ORDER BY month, dow"""
+        ).fetchall()
 
-    # Month x Day-of-week grid for heatmap
-    grid_rows = conn.execute(
-        """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
-                  CAST(strftime('%w', accident_date) AS INTEGER) as dow,
-                  COUNT(*) as accidents,
-                  COALESCE(SUM(deaths), 0) as deaths
-           FROM accidents
-           WHERE accident_date IS NOT NULL
-           GROUP BY month, dow
-           ORDER BY month, dow"""
-    ).fetchall()
+        # Week-of-month patterns (week 1-5)
+        wom_rows = conn.execute(
+            """SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
+                      CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths
+               FROM accidents
+               WHERE accident_date IS NOT NULL
+               GROUP BY week, dow
+               ORDER BY week, dow"""
+        ).fetchall()
 
-    # Week-of-month patterns (week 1-5)
-    wom_rows = conn.execute(
-        """SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
-                  CAST(strftime('%w', accident_date) AS INTEGER) as dow,
-                  COUNT(*) as accidents,
-                  COALESCE(SUM(deaths), 0) as deaths
-           FROM accidents
-           WHERE accident_date IS NOT NULL
-           GROUP BY week, dow
-           ORDER BY week, dow"""
-    ).fetchall()
-
-    conn.close()
-
-    return {
-        "by_dow": [dict(r) for r in dow_rows],
-        "by_month": [dict(r) for r in moy_rows],
-        "grid": [dict(r) for r in grid_rows],
-        "week_grid": [dict(r) for r in wom_rows],
-    }
+        return {
+            "by_dow": [dict(r) for r in dow_rows],
+            "by_month": [dict(r) for r in moy_rows],
+            "grid": [dict(r) for r in grid_rows],
+            "week_grid": [dict(r) for r in wom_rows],
+        }
 
 
 # ─── Accident Clusters ─────────────────────────────────────────
@@ -749,15 +738,14 @@ async def get_accident_clusters(
     """
     Detect clusters: multiple accidents in the same district within N days.
     """
-    conn = db.get_connection()
-    rows = conn.execute(
-        """SELECT id, accident_date, district, division, deaths, injuries,
-                  accident_type, location_raw, summary
-           FROM accidents
-           WHERE district IS NOT NULL AND accident_date IS NOT NULL
-           ORDER BY district, accident_date"""
-    ).fetchall()
-    conn.close()
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, accident_date, district, division, deaths, injuries,
+                      accident_type, location_raw, summary
+               FROM accidents
+               WHERE district IS NOT NULL AND accident_date IS NOT NULL
+               ORDER BY district, accident_date"""
+        ).fetchall()
 
     from collections import defaultdict
     from datetime import datetime as _dt, timedelta
@@ -840,87 +828,85 @@ async def get_yoy_summary():
     prev_year = current_year - 1
     current_month = _date.today().month
 
-    conn = db.get_connection()
-    result = {}
+    with db.get_db() as conn:
+        result = {}
 
-    for year in (current_year, prev_year):
-        row = conn.execute(
-            """SELECT COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?""",
-            (str(year),),
-        ).fetchone()
+        for year in (current_year, prev_year):
+            row = conn.execute(
+                """SELECT COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?""",
+                (str(year),),
+            ).fetchone()
 
-        # Per-month breakdown
-        months = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
-                      COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?
-               GROUP BY month ORDER BY month""",
-            (str(year),),
-        ).fetchall()
+            # Per-month breakdown
+            months = conn.execute(
+                """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+                          COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?
+                   GROUP BY month ORDER BY month""",
+                (str(year),),
+            ).fetchall()
 
-        # YTD comparison (compare only up to current month)
-        ytd = conn.execute(
-            """SELECT COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?
-                 AND CAST(strftime('%m', accident_date) AS INTEGER) <= ?""",
-            (str(year), current_month),
-        ).fetchone()
+            # YTD comparison (compare only up to current month)
+            ytd = conn.execute(
+                """SELECT COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths,
+                          COALESCE(SUM(injuries), 0) as injuries
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?
+                     AND CAST(strftime('%m', accident_date) AS INTEGER) <= ?""",
+                (str(year), current_month),
+            ).fetchone()
 
-        # Worst month
-        worst = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
-                      COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths
-               FROM accidents
-               WHERE strftime('%Y', accident_date) = ?
-               GROUP BY month
-               ORDER BY accidents DESC
-               LIMIT 1""",
-            (str(year),),
-        ).fetchone()
+            # Worst month
+            worst = conn.execute(
+                """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+                          COUNT(*) as accidents,
+                          COALESCE(SUM(deaths), 0) as deaths
+                   FROM accidents
+                   WHERE strftime('%Y', accident_date) = ?
+                   GROUP BY month
+                   ORDER BY accidents DESC
+                   LIMIT 1""",
+                (str(year),),
+            ).fetchone()
 
-        result[str(year)] = {
-            "year": year,
-            "total": dict(row),
-            "ytd": dict(ytd),
-            "by_month": [dict(m) for m in months],
-            "worst_month": dict(worst) if worst else None,
+            result[str(year)] = {
+                "year": year,
+                "total": dict(row),
+                "ytd": dict(ytd),
+                "by_month": [dict(m) for m in months],
+                "worst_month": dict(worst) if worst else None,
+            }
+
+        # Compute deltas
+        curr = result[str(current_year)]
+        prev = result[str(prev_year)]
+
+        def pct_change(new_val, old_val):
+            if old_val == 0:
+                return 100.0 if new_val > 0 else 0.0
+            return round(((new_val - old_val) / old_val) * 100, 1)
+
+        ytd_delta = {
+            "accidents": pct_change(curr["ytd"]["accidents"], prev["ytd"]["accidents"]),
+            "deaths": pct_change(curr["ytd"]["deaths"], prev["ytd"]["deaths"]),
+            "injuries": pct_change(curr["ytd"]["injuries"], prev["ytd"]["injuries"]),
         }
 
-    # Compute deltas
-    curr = result[str(current_year)]
-    prev = result[str(prev_year)]
-
-    def pct_change(new_val, old_val):
-        if old_val == 0:
-            return 100.0 if new_val > 0 else 0.0
-        return round(((new_val - old_val) / old_val) * 100, 1)
-
-    ytd_delta = {
-        "accidents": pct_change(curr["ytd"]["accidents"], prev["ytd"]["accidents"]),
-        "deaths": pct_change(curr["ytd"]["deaths"], prev["ytd"]["deaths"]),
-        "injuries": pct_change(curr["ytd"]["injuries"], prev["ytd"]["injuries"]),
-    }
-
-    conn.close()
-
-    return {
-        "current_year": current_year,
-        "previous_year": prev_year,
-        "current_month": current_month,
-        "data": result,
-        "ytd_delta": ytd_delta,
-    }
+        return {
+            "current_year": current_year,
+            "previous_year": prev_year,
+            "current_month": current_month,
+            "data": result,
+            "ytd_delta": ytd_delta,
+        }
 
 
 # ─── CSV Export ─────────────────────────────────────────────────
@@ -936,33 +922,32 @@ async def export_csv(
     import csv
     import io
 
-    conn = db.get_connection()
-    clauses = []
-    params = []
+    with db.get_db() as conn:
+        clauses = []
+        params = []
 
-    if start:
-        clauses.append("a.accident_date >= ?")
-        params.append(start)
-    if end:
-        clauses.append("a.accident_date <= ?")
-        params.append(end)
-    if district:
-        clauses.append("a.district = ?")
-        params.append(district)
+        if start:
+            clauses.append("a.accident_date >= ?")
+            params.append(start)
+        if end:
+            clauses.append("a.accident_date <= ?")
+            params.append(end)
+        if district:
+            clauses.append("a.district = ?")
+            params.append(district)
 
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
-    rows = conn.execute(
-        f"""SELECT a.accident_date, a.accident_type, a.district, a.division,
-                   a.location_raw, a.deaths, a.injuries, a.vehicles_involved,
-                   a.summary, ar.title as article_title, ar.url as article_url
-            FROM accidents a
-            LEFT JOIN articles ar ON a.article_id = ar.id
-            {where}
-            ORDER BY a.accident_date DESC""",
-        params,
-    ).fetchall()
-    conn.close()
+        rows = conn.execute(
+            f"""SELECT a.accident_date, a.accident_type, a.district, a.division,
+                       a.location_raw, a.deaths, a.injuries, a.vehicles_involved,
+                       a.summary, ar.title as article_title, ar.url as article_url
+                FROM accidents a
+                LEFT JOIN articles ar ON a.article_id = ar.id
+                {where}
+                ORDER BY a.accident_date DESC""",
+            params,
+        ).fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output)

@@ -98,9 +98,10 @@ The backend lives in the `app/` Python package. Every module has a single respon
 ```
 run.py
   └─▶ create_app()              [app/server.py]
+       ├─ Add CORS middleware    [allows cross-origin requests]
        ├─ Register API router    [app/routes.py]
        ├─ Mount /assets static   [static/dist/assets/]
-       ├─ Register SPA catch-all [serves index.html for all non-API routes]
+       ├─ Register SPA catch-all [serves index.html, or 503 if not built]
        └─ lifespan() context manager
             ├─ db.init_db()      [app/database.py]  ← creates tables if missing
             └─ start_scheduler() [app/scheduler.py]  ← begins 6-hour cron
@@ -109,6 +110,8 @@ run.py
 The `lifespan` async context manager ensures:
 - **On startup:** database is initialised and the scrape scheduler begins.
 - **On shutdown:** the scheduler is cleanly stopped.
+
+The SPA catch-all gracefully returns a 503 JSON response with build instructions if `static/dist/index.html` does not yet exist, instead of crashing with a 500 error.
 
 ### Configuration Layer
 
@@ -148,16 +151,20 @@ All endpoints are mounted under the `/api` prefix via `APIRouter(prefix="/api")`
 | GET | `/api/search?q=text&limit=N` | Full-text search across accidents + articles | Records |
 | GET | `/api/yearly` | Month-by-month aggregate for all time | Dashboard |
 | GET | `/api/scrape-logs?limit=N` | Scrape history (start time, articles found, status) | — |
-| POST | `/api/scrape` | Trigger an on-demand scrape | Layout (Scrape Now button) |
+| POST | `/api/scrape` | Trigger an on-demand scrape (runs in thread pool, non-blocking) | Layout (Scrape Now button) |
 
 **How routes connect to data:**
 
+All route handlers use the `get_db()` context manager for safe, leak-free database access:
+
 ```
 routes.py
-  ├─ GET  endpoints ──▶ db.get_connection() ──▶ raw SQL queries ──▶ JSON response
+  ├─ GET  endpoints ──▶ with db.get_db() as conn: ──▶ SQL queries ──▶ JSON response
   ├─ GET  helper fns ──▶ db.get_daily_stats(), db.get_monthly_stats(), etc.
-  └─ POST /api/scrape ─▶ scraper.run_scraper() ──▶ (see Scraping Pipeline)
+  └─ POST /api/scrape ─▶ run_in_executor(scraper.run_scraper) ──▶ (non-blocking)
 ```
+
+**Thread safety:** The YouTube video cache (`_yt_cache`) uses a `threading.Lock()` for safe concurrent access.
 
 ### Database Layer
 
@@ -173,14 +180,24 @@ Manages all SQLite operations. Uses `sqlite3.Row` row factory so results behave 
 
 | Group | Functions | Purpose |
 |-------|-----------|---------|
-| **Connection** | `get_connection()` | Returns a configured `sqlite3.Connection` |
+| **Connection** | `get_connection()`, `get_db()` | Returns a configured `sqlite3.Connection`. `get_db()` is a context manager with automatic commit/rollback/close |
 | **Schema** | `init_db()` | Creates tables and indexes if they don't exist |
 | **Articles** | `article_exists()`, `insert_article()` | Deduplicate and store scraped articles |
 | **Accidents** | `insert_accident()` | Store extracted accident records |
 | **Scrape Logs** | `start_scrape_log()`, `finish_scrape_log()` | Track scrape session metadata |
 | **Queries** | `get_daily_stats()`, `get_monthly_stats()`, `get_danger_zones()`, `get_recent_accidents()`, `get_all_accidents_for_map()`, `get_yearly_overview()`, `get_scrape_logs()` | Read operations used by API routes |
 
-> `init_db()` is also called at **module import time** (`database.py` last line), ensuring the schema exists even if the app is imported without going through the lifespan.
+**Connection management:**
+
+All database operations use the `get_db()` context manager:
+
+```python
+with db.get_db() as conn:
+    rows = conn.execute("SELECT ...").fetchall()
+    # auto-commits on success, rolls back on exception, always closes
+```
+
+This eliminates connection leaks that would occur if an exception were raised between `get_connection()` and `conn.close()`. The `init_db()` function is called once during server startup via the lifespan manager — not at module import time.
 
 ### Scraper Module
 
@@ -202,7 +219,11 @@ The scraper is a two-phase pipeline:
    - Saves the raw article via `insert_article()`.
    - **Immediately** passes the content to `AccidentExtractor.process_article()` to extract structured data.
 
-**Politeness:** A configurable `REQUEST_DELAY` (2 seconds) pause is inserted between each HTTP request to avoid overloading the source.
+**Reliability features:**
+- **Polite crawling:** A configurable `REQUEST_DELAY` (2 seconds) pause is inserted between each HTTP request to avoid overloading the source.
+- **Date integrity:** If the article's published date cannot be parsed from any source (HTML tags, meta, JSON-LD), it is stored as `None` with a warning log — instead of silently defaulting to today's date, which would corrupt time-series analysis.
+- **Early duplicate termination:** If all articles on a listing page already exist in the database, the scraper stops pagination early instead of continuing to fetch more pages of duplicates.
+- **Extractor reuse:** A single `AccidentExtractor` instance is reused across all articles in a scrape cycle, reducing unnecessary object creation.
 
 **Scrape logging:** Every scrape session is wrapped in a `scrape_log` record (started → completed/error) so the frontend can display scrape history.
 
@@ -269,7 +290,9 @@ Raw article text
 | `_district_to_division()` | Dictionary lookup from `_DIVISION_MAP` | Maps any district to its parent division |
 | `_extract_casualties()` | Regex patterns matching `"N killed"`, `"killing N"`, `"N injured"`, etc. with word-to-number conversion ("three" → 3) | `{deaths: int, injuries: int}` |
 | `_extract_vehicles()` | Keyword search for 11 vehicle categories | Comma-separated string, e.g. `"bus, truck"` |
-| `_generate_summary()` | First 3 sentences capped at 200 characters | Short text summary |
+| `_generate_summary()` | First 5 sentences (skipping boilerplate like copyright notices, "follow us" prompts), capped at 200 characters | Short text summary |
+
+**Division name normalization:** The `_district_to_division()` method uses `_DIVISION_ALIASES` to handle variant spellings (e.g. "Chattogram" → "Chittagong", "Barishal" → "Barisal") so that all records use canonical division names regardless of which spelling appears in the article.
 
 **Geo-coordinates:** The module contains a `DISTRICT_COORDINATES` dictionary mapping 80+ locations (all 64 districts plus major Dhaka sub-areas) to `(latitude, longitude)` tuples. These coordinates are used for map marker placement and heatmap rendering.
 
@@ -391,23 +414,27 @@ This is the end-to-end flow when data enters the system — either via the sched
          │
          ├── start_scrape_log()         → scrape_logs table (status: running)
          │
+         ├── Create single AccidentExtractor instance (reused for all articles)
+         │
          ├── for page in 0..4:
          │     fetch listing page from The Daily Star
          │     parse <a> links with BeautifulSoup
+         │     if all articles on page are duplicates → stop early
          │
          ├── for each article URL:
          │     ├── article_exists(url)?  → skip if already scraped
          │     ├── fetch full article page
          │     ├── extract title, date, body text
+         │     │     └── if date unparseable → store None (don't default to today)
          │     ├── insert_article()      → articles table
          │     │
          │     └── AccidentExtractor.process_article()
          │           ├── Relevance check (keyword filter)
          │           ├── _extract_accident_type()
-         │           ├── _extract_location()   → district + division + coords
+         │           ├── _extract_location()   → district + division (normalized) + coords
          │           ├── _extract_casualties()  → deaths + injuries
          │           ├── _extract_vehicles()
-         │           ├── _generate_summary()
+         │           ├── _generate_summary()    → filters boilerplate text
          │           └── insert_accident()      → accidents table
          │
          └── finish_scrape_log()        → scrape_logs table (status: completed)
@@ -428,7 +455,7 @@ This is the flow when a user interacts with the dashboard.
        ▼
   routes.py → get_overview()
        │
-       │  db.get_connection() → SQL query
+       │  with db.get_db() as conn: → SQL query
        ▼
   database.py → SQLite (accidents.db)
        │
@@ -518,7 +545,9 @@ articles  ◀──── 1:1 ────▶  accidents
 |-------|-------|-----------|---------|
 | `idx_accidents_date` | accidents | `accident_date` | Fast daily/monthly queries |
 | `idx_accidents_district` | accidents | `district` | Fast district aggregations |
+| `idx_accidents_division` | accidents | `division` | Fast division-level stats |
 | `idx_accidents_type` | accidents | `accident_type` | Fast type breakdowns |
+| `idx_accidents_article` | accidents | `article_id` | Fast article-accident joins |
 | `idx_articles_url` | articles | `url` | O(1) duplicate checking during scraping |
 | `idx_articles_published` | articles | `published_date` | Date-range queries |
 
@@ -674,6 +703,7 @@ main.jsx
 | Layer | Library | Purpose |
 |-------|---------|---------|
 | Backend | `fastapi` | HTTP framework, request validation |
+| Backend | `fastapi` (CORSMiddleware) | Cross-origin request support |
 | Backend | `uvicorn` | ASGI server |
 | Backend | `beautifulsoup4` + `lxml` | HTML parsing |
 | Backend | `requests` | HTTP client for scraping |
