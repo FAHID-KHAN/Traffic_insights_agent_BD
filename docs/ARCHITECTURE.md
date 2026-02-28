@@ -863,7 +863,7 @@ Runs on every pull request targeting `main`.
              └── Ensures the app module loads cleanly
 ```
 
-**Branch rules** (documented in `CONTRIBUTING.md`):
+**Branch rules** (documented in `docs/CONTRIBUTING.md`):
 - Feature branches: `feature/<name>`
 - Bug fix branches: `bugfix/<name>`
 - All changes go through PR review before merging to `main`

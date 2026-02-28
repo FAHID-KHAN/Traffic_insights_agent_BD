@@ -63,7 +63,7 @@
 
 ### Phase 8 — Documentation
 - [x] Comprehensive **README.md** with quick start, feature list, API reference
-- [x] Detailed **ARCHITECTURE.md** covering system design, data flow, schema
+- [x] Detailed **docs/ARCHITECTURE.md** covering system design, data flow, schema
 - [x] Both docs updated to reflect all backend hardening changes
 
 ---

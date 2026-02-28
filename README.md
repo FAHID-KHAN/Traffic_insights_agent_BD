@@ -141,8 +141,11 @@ Traffic_insights_agent_BD/
 ├── .github/
 │   ├── workflows/ci.yml        # CI pipeline (parallel lint + test)
 │   └── pull_request_template.md
-├── ARCHITECTURE.md             # Detailed architecture documentation
-├── CONTRIBUTING.md             # Branch & PR rules
+├── docs/                       # Project documentation
+│   ├── ARCHITECTURE.md         # Detailed architecture documentation
+│   ├── CONTRIBUTING.md         # Branch & PR rules
+│   ├── DEPLOYMENT_PLAN.md      # Deployment strategy
+│   └── ROADMAP.md              # Project roadmap & milestones
 └── .gitignore
 ```
 
