@@ -18,6 +18,7 @@ export default function Daily() {
     }
   }, [date]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   const typeChartData = data?.by_type?.length > 0

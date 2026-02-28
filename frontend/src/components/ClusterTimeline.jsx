@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api, formatDate } from '../utils/api';
 import { FaLayerGroup, FaExclamationTriangle, FaSkullCrossbones, FaMapMarkerAlt, FaCalendarAlt, FaSlidersH, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
@@ -17,15 +17,16 @@ export default function ClusterTimeline() {
   const [expanded, setExpanded] = useState(new Set());
   const [showSettings, setShowSettings] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     api(`/clusters?window_days=${windowDays}&min_accidents=${minAccidents}`)
       .then(setClusters)
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [windowDays, minAccidents]);
 
-  useEffect(() => { load(); }, [windowDays, minAccidents]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load(); }, [load]);
 
   const toggleExpand = (id) => {
     setExpanded(prev => {

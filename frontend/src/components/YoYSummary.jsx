@@ -37,7 +37,7 @@ export default function YoYSummary() {
   if (loading) return <div className="chart-card full-width"><div className="loading-pulse">Loading year summary...</div></div>;
   if (!data) return null;
 
-  const { current_year, previous_year, data: yearData, ytd_delta, current_month } = data;
+  const { current_year, previous_year, data: yearData, ytd_delta } = data;
   const curr = yearData[String(current_year)];
   const prev = yearData[String(previous_year)];
 
