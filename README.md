@@ -55,6 +55,11 @@ This application scrapes, processes, and visualizes road accident data to identi
 | **Database** | SQLite (WAL mode, context-managed connections) |
 | **Scheduler** | APScheduler (6-hour interval) |
 | **Theme** | CSS custom properties + ThemeProvider context |
+| **Backend Testing** | pytest 9+ / pytest-asyncio / httpx (73 tests) |
+| **Frontend Testing** | Vitest 4 / Testing Library / jsdom (18 tests) |
+| **Rate Limiting** | In-memory sliding-window per-IP limiter |
+| **Security** | Custom middleware — CSP, HSTS, X-Frame-Options, etc. |
+| **CI/CD** | GitHub Actions (parallel backend + frontend jobs) |
 
 ---
 
@@ -69,10 +74,11 @@ Traffic_insights_agent_BD/
 │   ├── config.py               # Configuration, divisions, districts
 │   ├── database.py             # SQLite models & queries
 │   ├── extractor.py            # NLP-based accident data extraction
+│   ├── rate_limit.py            # Sliding-window per-IP rate limiter
 │   ├── routes.py               # FastAPI route definitions (30+ endpoints)
 │   ├── scheduler.py            # APScheduler background job
 │   ├── scraper.py              # Web scraper (The Daily Star)
-│   └── server.py               # Application factory + SPA serving
+│   └── server.py               # Application factory + security middleware
 ├── frontend/                   # React + Vite frontend
 │   ├── index.html              # HTML entry point
 │   ├── package.json            # Node dependencies
@@ -82,6 +88,12 @@ Traffic_insights_agent_BD/
 │       ├── App.jsx             # Router with 8 routes
 │       ├── styles/
 │       │   └── global.css      # Dark/light theme, responsive styles
+│       ├── __tests__/
+│       │   ├── setup.js            # Vitest global setup (jest-dom)
+│       │   ├── api.test.js         # 7 tests — api(), formatDate, COLORS
+│       │   ├── useToast.test.js    # 4 tests — useToast hook
+│       │   ├── ErrorBoundary.test.jsx  # 4 tests — ErrorBoundary
+│       │   └── NotFound.test.jsx   # 3 tests — 404 page
 │       ├── utils/
 │       │   ├── api.js          # Fetch helpers, COLORS, formatDate
 │       │   ├── useTheme.jsx    # ThemeProvider context (dark/light)
@@ -111,6 +123,14 @@ Traffic_insights_agent_BD/
 ├── static/dist/                # Production build (generated)
 ├── data/                       # SQLite database (auto-created)
 │   └── accidents.db
+├── tests/                      # Backend test suite (pytest)
+│   ├── __init__.py
+│   ├── conftest.py             # Shared fixtures, temp DB isolation
+│   ├── test_database.py        # 13 tests — CRUD, stats, danger zones
+│   ├── test_extractor.py       # 24 tests — NLP extraction pipeline
+│   ├── test_routes.py          # 29 tests — all API endpoints (httpx)
+│   └── test_security.py        # 7 tests — headers & rate limiting
+├── pyproject.toml              # pytest configuration
 ├── Dockerfile                  # Multi-stage build (Node 22 + Python 3.13)
 ├── docker-compose.dev.yml      # Dev environment (port 8000, hot-reload)
 ├── docker-compose.prod.yml     # Prod environment (port 80, healthcheck)
@@ -119,7 +139,7 @@ Traffic_insights_agent_BD/
 ├── .env.production             # Prod environment variables
 ├── .dockerignore               # Docker build exclusions
 ├── .github/
-│   ├── workflows/ci.yml        # CI pipeline (lint + test)
+│   ├── workflows/ci.yml        # CI pipeline (parallel lint + test)
 │   └── pull_request_template.md
 ├── ARCHITECTURE.md             # Detailed architecture documentation
 ├── CONTRIBUTING.md             # Branch & PR rules
@@ -347,6 +367,111 @@ The backend has been hardened with the following reliability improvements:
 - **Boilerplate-filtered summaries** — Article summaries now filter out copyright notices, "follow us" prompts, and other boilerplate text
 - **Additional database indexes** — Added indexes on `division` and `article_id` columns for faster aggregation queries
 - **Single initialization** — Database schema is initialized once during server startup (via the lifespan manager) instead of redundantly at module import time
+
+---
+
+## Testing
+
+The project has **91 automated tests** across backend and frontend, all runnable locally and in CI.
+
+### Backend Tests (pytest)
+
+73 tests covering the database layer, NLP extractor, all API routes, security headers, and rate limiting.
+
+```bash
+# Activate your virtual environment first
+source .venv/bin/activate
+
+# Run all backend tests
+python -m pytest tests/ -v
+
+# Run a specific test file
+python -m pytest tests/test_routes.py -v
+
+# Run with coverage (if pytest-cov is installed)
+python -m pytest tests/ --cov=app
+```
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| `test_database.py` | 13 | Article/accident CRUD, stats queries, danger zones, map data |
+| `test_extractor.py` | 24 | Accident type detection, location extraction, casualty parsing, vehicles, full pipeline |
+| `test_routes.py` | 29 | All API endpoints via `httpx.AsyncClient` — overview, daily, monthly, search, trend, compare, export, forecast, clusters, YoY |
+| `test_security.py` | 7 | Security headers verification, rate limiting integration + unit tests |
+
+Each test runs against an **isolated temporary SQLite database** that is created and destroyed per test via the `conftest.py` fixtures. No test data leaks between tests.
+
+### Frontend Tests (Vitest)
+
+18 tests covering utility functions, hooks, and key components.
+
+```bash
+cd frontend
+
+# Run all frontend tests
+npm test
+
+# Run in watch mode (re-runs on file changes)
+npm run test:watch
+```
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| `api.test.js` | 7 | `api()`, `postApi()`, `formatDate()`, `COLORS` constant |
+| `useToast.test.js` | 4 | Toast hook — show, auto-dismiss, manual dismiss, max limit |
+| `ErrorBoundary.test.jsx` | 4 | Renders children, catches errors, shows fallback UI, reset |
+| `NotFound.test.jsx` | 3 | 404 page rendering, home link, status code display |
+
+---
+
+## Security
+
+### Security Headers
+
+All responses include hardened HTTP headers via `SecurityHeadersMiddleware` in `app/server.py`:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevent MIME-type sniffing |
+| `X-Frame-Options` | `DENY` | Block clickjacking via iframes |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Control referrer leakage |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Disable unnecessary browser APIs |
+| `Content-Security-Policy` | `default-src 'self'; ...` | Restrict resource loading origins |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Force HTTPS (**production only**) |
+
+### Rate Limiting
+
+The `POST /api/scrape` endpoint is protected by an **in-memory sliding-window rate limiter**:
+
+- **Limit**: 3 requests per 60-second window per IP address
+- **IP detection**: Uses `X-Forwarded-For` header (proxy-aware) or falls back to `client.host`
+- **Exceeded response**: Returns `429 Too Many Requests` with a `Retry-After` header indicating seconds until the window resets
+- **Implementation**: `app/rate_limit.py` — lightweight, no external dependencies
+
+---
+
+## CI / CD Pipeline
+
+GitHub Actions runs **two parallel jobs** on every push and pull request (`.github/workflows/ci.yml`):
+
+### Backend Job
+| Step | Detail |
+|------|--------|
+| **Matrix** | Python 3.11 + 3.12 |
+| **Lint** | `flake8` with relaxed line-length (120 chars) |
+| **Import Check** | Verifies all app modules import without errors |
+| **Tests** | `pytest tests/ -v` against isolated temp databases |
+
+### Frontend Job
+| Step | Detail |
+|------|--------|
+| **Runtime** | Node.js 22 |
+| **Install** | `npm ci` (locked dependencies) |
+| **Lint** | `npx eslint src/` |
+| **Tests** | `npx vitest run` (jsdom environment) |
+| **Build** | `npm run build` — ensures production bundle compiles |
+
+Both jobs must pass before a pull request can be merged.
 
 ---
 
