@@ -12,6 +12,8 @@
    - [Entry Point & Application Factory](#entry-point--application-factory)
    - [Configuration Layer](#configuration-layer)
    - [API Layer (Routes)](#api-layer-routes)
+   - [Rate Limiting](#rate-limiting)
+   - [Security Middleware](#security-middleware)
    - [Database Layer](#database-layer)
    - [Scraper Module](#scraper-module)
    - [NLP Extractor Module](#nlp-extractor-module)
@@ -34,7 +36,8 @@
 9. [Environment Configuration](#environment-configuration)
 10. [Development vs Production](#development-vs-production)
 11. [CI / CD](#ci--cd)
-12. [Dependency Map](#dependency-map)
+12. [Testing](#testing)
+13. [Dependency Map](#dependency-map)
 
 ---
 
@@ -97,7 +100,8 @@ The backend lives in the `app/` Python package. Every module has a single respon
 | File | Purpose |
 |------|---------|
 | `run.py` | Entry point. Imports `create_app()` from `app.server`, reads `API_HOST`, `API_PORT`, and `DEBUG` from config, and binds to Uvicorn with conditional reload and log level. |
-| `app/server.py` | **Application factory** — `create_app()` builds and returns a configured FastAPI instance. Environment-aware: disables Swagger/ReDoc in production, configures logging from `LOG_LEVEL`, and sets CORS origins from the `CORS_ORIGINS` env var. |
+| `app/server.py` | **Application factory** — `create_app()` builds and returns a configured FastAPI instance. Environment-aware: disables Swagger/ReDoc in production, configures logging from `LOG_LEVEL`, sets CORS origins, and applies `SecurityHeadersMiddleware`. |
+| `app/rate_limit.py` | **Rate limiter** — `RateLimiter` class used as a FastAPI dependency to throttle the POST `/api/scrape` endpoint (3 requests per 60-second window per IP). |
 
 **Startup sequence (`create_app` → `lifespan`):**
 
@@ -108,6 +112,7 @@ run.py
        ├─ Configure logging      [level from LOG_LEVEL env var]
        ├─ Conditional Swagger     [/docs + /redoc only when DEBUG=True]
        ├─ Add CORS middleware    [origins from CORS_ORIGINS env var]
+       ├─ Add SecurityHeadersMiddleware  [CSP, X-Frame-Options, HSTS, etc.]
        ├─ Register API router    [app/routes.py]
        ├─ Mount /assets static   [static/dist/assets/]
        ├─ Register SPA catch-all [serves index.html, or 503 if not built]
@@ -173,17 +178,29 @@ All endpoints are mounted under the `/api` prefix via `APIRouter(prefix="/api")`
 
 | Method | Endpoint | Description | Used by Page |
 |--------|----------|-------------|-------------|
-| GET | `/api/overview` | Global stats (total accidents, deaths, injuries, today's count, last scrape info) | Dashboard |
-| GET | `/api/trend?days=N` | Daily accident count for the last N days | Dashboard (line chart) |
+| GET | `/api/overview` | Global stats with optional `start`/`end` date filters | Dashboard |
+| GET | `/api/trend?days=N` | Daily accident count for the last N days | Dashboard |
 | GET | `/api/daily?date=YYYY-MM-DD` | Stats for a single date (by type, by district) | Daily |
 | GET | `/api/monthly?year=Y&month=M` | Stats for a month (daily breakdown, type, district) | Monthly |
 | GET | `/api/danger-zones?limit=N` | Top N districts ranked by accident count | Zones |
+| GET | `/api/danger-index` | Deaths-per-accident fatality index per district | Zones |
+| GET | `/api/divisions` | Division-level aggregated stats | DangerMap |
 | GET | `/api/map-data` | All accidents with lat/lon for map plotting | DangerMap |
 | GET | `/api/recent?limit=N` | Most recent accident records with article links | Records |
-| GET | `/api/search?q=text&limit=N` | Full-text search across accidents + articles | Records |
+| GET | `/api/search` | Full-text + advanced search (district, type, severity, date range) | SearchPage |
 | GET | `/api/yearly` | Month-by-month aggregate for all time | Dashboard |
+| GET | `/api/compare/monthly` | Side-by-side month comparison (delta indicators) | Compare |
+| GET | `/api/compare/yearly` | Side-by-side year comparison | Compare |
+| GET | `/api/forecast` | 3-month simple moving-average forecast | Dashboard (ForecastChart) |
+| GET | `/api/time-patterns` | Month × day-of-week accident heatmap data | Dashboard (TimeHeatmap) |
+| GET | `/api/clusters` | Sliding-window accident cluster detection | Dashboard (ClusterTimeline) |
+| GET | `/api/yoy-summary` | Year-over-year summary with current vs previous year | Dashboard (YoYSummary) |
+| GET | `/api/alerts/high-severity` | Recent accidents with 5+ deaths (last 3 days) | AlertBanner |
+| GET | `/api/articles/latest?limit=N` | Latest scraped articles with badges | LiveNews |
+| GET | `/api/youtube-videos` | YouTube search results (cached 30 min) | YouTubeNews |
+| GET | `/api/export/csv` | CSV download (supports date/district filters) | Layout (Export button) |
 | GET | `/api/scrape-logs?limit=N` | Scrape history (start time, articles found, status) | — |
-| POST | `/api/scrape` | Trigger an on-demand scrape (runs in thread pool, non-blocking) | Layout (Scrape Now button) |
+| POST | `/api/scrape` | Trigger an on-demand scrape — **rate limited** (3 req/min/IP), non-blocking | Layout (Scrape Now button) |
 
 **How routes connect to data:**
 
@@ -197,6 +214,45 @@ routes.py
 ```
 
 **Thread safety:** The YouTube video cache (`_yt_cache`) uses a `threading.Lock()` for safe concurrent access.
+
+### Rate Limiting
+
+**File:** `app/rate_limit.py`
+
+The `RateLimiter` class implements a **sliding-window per-IP rate limiter** using an in-memory dictionary. It is used as a FastAPI `Depends()` dependency.
+
+```python
+scrape_limiter = RateLimiter(max_calls=3, window_seconds=60)
+
+@router.post("/scrape")
+async def trigger_scrape(request: Request, _=Depends(scrape_limiter)):
+    ...
+```
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Max calls | 3 | Per IP per window |
+| Window | 60 seconds | Sliding (not fixed-bucket) |
+| IP detection | `X-Forwarded-For` then `client.host` | Proxy-aware |
+| Exceeded response | HTTP `429 Too Many Requests` | Includes `Retry-After` header |
+| Storage | In-memory `dict` | Resets on server restart |
+
+Only the scrape endpoint is rate limited — all read (GET) endpoints are unrestricted.
+
+### Security Middleware
+
+**File:** `app/server.py` — `SecurityHeadersMiddleware(BaseHTTPMiddleware)`
+
+Added to every response via Starlette's `BaseHTTPMiddleware`. Sets hardened HTTP security headers:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME-type sniffing attacks |
+| `X-Frame-Options` | `DENY` | Blocks clickjacking via iframes |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer information leakage |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Disables unused browser APIs |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline'; ...` | Restricts resource loading origins |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS — **production only** (`APP_ENV=production`) |
 
 ### Database Layer
 
@@ -351,39 +407,58 @@ The frontend is a **React 19 SPA** built with **Vite**, located in the `frontend
 
 ### React Component Tree
 
+All page components are **lazy-loaded** via `React.lazy()` + `<Suspense>` to reduce initial bundle size. The entire app is wrapped in an `<ErrorBoundary>` for graceful error recovery.
+
 ```
-<BrowserRouter>
-  └─ <Routes>
-       └─ <Route element={<Layout />}>                ← persistent shell
-            ├─ <Route index      element={<Dashboard />} />
-            ├─ <Route path="daily"    element={<Daily />} />
-            ├─ <Route path="monthly"  element={<Monthly />} />
-            ├─ <Route path="map"      element={<DangerMap />} />
-            ├─ <Route path="zones"    element={<Zones />} />
-            └─ <Route path="records"  element={<Records />} />
+<ErrorBoundary>                                       ← catches render errors globally
+  <ThemeProvider>                                     ← dark/light theme context
+    <BrowserRouter>
+      └─ <Routes>
+           └─ <Route element={<Layout />}>            ← persistent shell
+                ├─ <Route index          element={lazy(<Dashboard />)} />
+                ├─ <Route path="daily"   element={lazy(<Daily />)} />
+                ├─ <Route path="monthly" element={lazy(<Monthly />)} />
+                ├─ <Route path="map"     element={lazy(<DangerMap />)} />
+                ├─ <Route path="zones"   element={lazy(<Zones />)} />
+                ├─ <Route path="compare" element={lazy(<Compare />)} />
+                ├─ <Route path="search"  element={lazy(<SearchPage />)} />
+                ├─ <Route path="records" element={lazy(<Records />)} />
+                └─ <Route path="*"       element={<NotFound />} />   ← 404
 ```
 
 ### Component Responsibilities
 
 #### Shared Components (`src/components/`)
 
-| Component | Props | Role |
-|-----------|-------|------|
-| **Layout** | — | App shell: header with title, navigation tabs (`<NavLink>`), "Scrape Now" button, toast notification area, `<Outlet>` for child routes. |
-| **StatCard** | `title`, `value`, `icon`, `color` | Reusable stat display card (e.g. "Total Deaths: 142"). Accepts a react-icon component. |
-| **ChartCard** | `title`, `type`, `data`, `options` | Wrapper around `react-chartjs-2` — supports `line`, `bar`, `doughnut`, `pie` chart types. |
-| **ToastContainer** | `toasts` | Renders a stack of toast notification messages. |
+| Component | Role |
+|-----------|------|
+| **Layout** | App shell: header with BDLogo, navigation tabs, theme toggle, Export/Scrape Now buttons, `<AlertBanner>`, `<Outlet>` for child pages |
+| **BDLogo** | Custom SVG Bangladesh-themed logo with flag colours |
+| **StatCard** | Reusable stat display card — accepts title, value, icon, color |
+| **ChartCard** | Wrapper around `react-chartjs-2` — supports `line`, `bar`, `doughnut`, `pie` chart types |
+| **AlertBanner** | Dismissable red banner for high-severity accidents (5+ deaths in last 3 days), auto-refreshes every 5 minutes |
+| **LiveNews** | Grid of latest scraped article cards with death/injury badges |
+| **YouTubeNews** | Embedded YouTube video grid for Bangladesh road accident news (30-min server cache) |
+| **ForecastChart** | 3-month simple moving-average forecast line overlaid on monthly trend data |
+| **TimeHeatmap** | Month × day-of-week accident frequency heatmap grid |
+| **ClusterTimeline** | Sliding-window cluster detection — groups accidents in same district within a configurable time window |
+| **YoYSummary** | Year-over-year comparison card (current YTD vs previous YTD) with delta badges |
+| **ToastContainer** | Renders a stack of auto-dismiss toast notifications |
+| **ErrorBoundary** | Class component catching unhandled render errors; displays fallback UI with reset button |
 
 #### Page Components (`src/pages/`)
 
 | Page | API Endpoints Consumed | Visualisations |
 |------|----------------------|----------------|
-| **Dashboard** | `/api/overview`, `/api/trend?days=30` | 4 stat cards, trend line chart, accident type doughnut, district bar chart |
-| **Daily** | `/api/daily?date=YYYY-MM-DD` | Date picker, 3 stat cards, type pie chart, district bar chart |
-| **Monthly** | `/api/monthly?year=Y&month=M` | Year + month selectors, 3 stat cards, daily breakdown line, type doughnut, district bar chart |
-| **DangerMap** | `/api/map-data` | Full-screen Leaflet map, MarkerCluster layer, heatmap toggle, popup cards with accident details |
-| **Zones** | `/api/danger-zones` | Ranked list of danger zone cards with accident/death/injury counts |
-| **Records** | `/api/recent`, `/api/search?q=` | Searchable table with debounced input, links back to original articles |
+| **Dashboard** | `/overview`, `/trend`, `/forecast`, `/time-patterns`, `/clusters`, `/yoy-summary`, `/articles/latest`, `/youtube-videos` | Stat cards, trend chart, type doughnut, district bar, ForecastChart, TimeHeatmap, ClusterTimeline, YoYSummary, LiveNews, YouTubeNews |
+| **Daily** | `/daily` | Date picker, 3 stat cards, type pie, district bar |
+| **Monthly** | `/monthly` | Year/month selectors, 3 stat cards, daily line, type doughnut, district bar |
+| **DangerMap** | `/map-data`, `/divisions` | Leaflet map with MarkerCluster + heatmap toggle, division breakdown cards with district drill-down |
+| **Zones** | `/danger-zones`, `/danger-index` | Toggle between Fatality Index (severity-scored) and Classic Ranking views |
+| **Compare** | `/compare/monthly`, `/compare/yearly` | Month-vs-Month and Year-vs-Year comparison — delta indicators, trend overlay, type comparison, district deaths bar |
+| **SearchPage** | `/search` | Advanced search with district, type, severity, date range filters; results summary bar; critical row highlighting |
+| **Records** | `/recent`, `/search` | Searchable records table with debounced input, links to source articles |
+| **NotFound** | — | 404 page with home link |
 
 ### Routing
 
@@ -398,7 +473,10 @@ All routes are nested inside `<Layout>` so the header and navigation persist acr
 | `/monthly` | Monthly |
 | `/map` | DangerMap |
 | `/zones` | Zones |
+| `/compare` | Compare |
+| `/search` | SearchPage |
 | `/records` | Records |
+| `/*` | NotFound (404) |
 
 FastAPI's SPA catch-all (`/{path:path}` → `index.html`) ensures deep links and browser refresh work correctly for all frontend routes.
 
@@ -422,8 +500,7 @@ In **production**, both the React SPA and the API are served from the same FastA
 | File | Exports | Purpose |
 |------|---------|---------|
 | `api.js` | `api()`, `postApi()`, `formatDate()`, `COLORS` | HTTP helpers, date formatting, consistent chart colour palette (15 colours) |
-| `useToast.js` | `useToast()` hook | Custom React hook managing toast state with auto-dismiss timers |
-
+| `useToast.js` | `useToast()` hook | Custom React hook managing toast state with auto-dismiss timers || `useTheme.jsx` | `ThemeProvider`, `useTheme()` | React context providing dark/light theme toggle; persisted in `localStorage` |
 ---
 
 ## Data Flow
@@ -846,27 +923,74 @@ make db-backup                 # Backup database before upgrades
 
 **File:** `.github/workflows/ci.yml`
 
-Runs on every pull request targeting `main`.
+Runs on **every push to any branch** and on **pull requests targeting `main`**. Markdown-only commits are skipped via `paths-ignore`. A `concurrency` group cancels any superseded run on the same branch automatically.
+
+### Backend Job
 
 ```
-  PR opened/updated → GitHub Actions
+  push / PR → GitHub Actions (backend job)
        │
-       ├── Matrix: Python 3.11, 3.12
+       ├── Matrix: Python 3.11, 3.12, 3.13   ← matches Docker runtime (3.13-slim)
+       ├── cache: pip                          ← faster installs
        │
-       ├── Step 1: Install Python deps
+       ├── Step 1: pip install -r requirements.txt + flake8 + pytest + httpx
        │
-       ├── Step 2: flake8 lint check
-       │     └── Checks for syntax errors, undefined names, style issues
+       ├── Step 2: flake8 lint (syntax errors, undefined names, max-line-length=120)
        │
-       └── Step 3: Import verification
-             └── python -c "from app.server import create_app"
-             └── Ensures the app module loads cleanly
+       ├── Step 3: import verification
+       │     └── python -c "from app.server import create_app"
+       │
+       └── Step 4: pytest tests/ -v --tb=short
+             └── 73 tests across test_database, test_extractor, test_routes, test_security
+             └── Each test runs against an isolated temporary SQLite database
+```
+
+### Frontend Job
+
+```
+  push / PR → GitHub Actions (frontend job, runs in parallel with backend)
+       │
+       ├── Node.js 22
+       ├── cache: npm (via package-lock.json)
+       │
+       ├── Step 1: npm ci
+       ├── Step 2: npx eslint src/
+       ├── Step 3: npx vitest run  ← 18 tests (jsdom environment)
+       └── Step 4: npm run build   ← ensures production bundle compiles
 ```
 
 **Branch rules** (documented in `docs/CONTRIBUTING.md`):
 - Feature branches: `feature/<name>`
 - Bug fix branches: `bugfix/<name>`
 - All changes go through PR review before merging to `main`
+
+---
+
+## Testing
+
+### Backend Tests (`tests/`)
+
+Run with `python -m pytest tests/ -v`. Each test gets an **isolated temporary SQLite database** via the `conftest.py` autouse fixture — no test data bleeds between tests.
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `tests/test_database.py` | 13 | Article/accident CRUD, duplicate detection, scrape logs, daily/monthly stats, danger zones, map data, yearly overview |
+| `tests/test_extractor.py` | 24 | Accident type detection (8 types), location extraction (district, division, inference), casualty parsing (numeric, word, mixed, zero), vehicles, summary, full `process_article()` pipeline |
+| `tests/test_routes.py` | 29 | All API endpoints via `httpx.AsyncClient` — overview, daily, monthly, danger zones, recent, map, yearly, search, trend, compare, divisions, danger index, alerts, forecast, time patterns, clusters, YoY, export CSV, scrape logs, latest articles |
+| `tests/test_security.py` | 7 | Security headers (`X-Content-Type-Options`, `X-Frame-Options`, CSP, HSTS, Referrer-Policy, Permissions-Policy), rate limiting integration test, `RateLimiter` unit test |
+
+**Configuration:** `pyproject.toml` sets `asyncio_mode = "auto"` and `testpaths = ["tests"]`.
+
+### Frontend Tests (`frontend/src/__tests__/`)
+
+Run with `npm test` (or `npm run test:watch` for watch mode). Uses jsdom environment.
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `api.test.js` | 7 | `api()`, `postApi()`, error handling, `formatDate()`, `COLORS` constant |
+| `useToast.test.js` | 4 | Toast show, auto-dismiss timer, manual dismiss, max toast limit |
+| `ErrorBoundary.test.jsx` | 4 | Renders children normally, catches errors, shows fallback UI, reset button |
+| `NotFound.test.jsx` | 3 | 404 page renders, home link present, status code displayed |
 
 ---
 
@@ -877,11 +1001,12 @@ Runs on every pull request targeting `main`.
 ```
 run.py
   └─▶ app.server.create_app()
-        ├─▶ app.routes.router          (APIRouter)
-        │     └─▶ app.database.*       (all query functions)
+        ├─▶ app.rate_limit.scrape_limiter    (RateLimiter dependency)
+        ├─▶ app.routes.router               (APIRouter)
+        │     ├─▶ app.database.*            (all query functions)
         │     └─▶ app.scraper.run_scraper()
-        │           ├─▶ app.config.*   (URLs, timeouts)
-        │           ├─▶ app.database.* (article_exists, insert_article, scrape_logs)
+        │           ├─▶ app.config.*        (URLs, timeouts)
+        │           ├─▶ app.database.*      (article_exists, insert_article, scrape_logs)
         │           └─▶ app.extractor.AccidentExtractor
         │                 ├─▶ app.config.BANGLADESH_DISTRICTS / DIVISIONS
         │                 └─▶ app.database.insert_accident()
@@ -896,43 +1021,61 @@ run.py
 ```
 main.jsx
   └─▶ App.jsx
-        └─▶ Layout.jsx
-              ├─▶ useToast.js           (toast hook)
-              ├─▶ ToastContainer.jsx
-              ├─▶ api.js → postApi()    (scrape button)
-              └─▶ <Outlet>
-                    ├─▶ Dashboard.jsx
-                    │     ├─▶ api.js → api()
-                    │     ├─▶ StatCard.jsx
-                    │     └─▶ ChartCard.jsx (Line, Doughnut, Bar)
-                    ├─▶ Daily.jsx
-                    │     ├─▶ api.js → api()
-                    │     ├─▶ StatCard.jsx
-                    │     └─▶ ChartCard.jsx (Pie, Bar)
-                    ├─▶ Monthly.jsx
-                    │     ├─▶ api.js → api()
-                    │     ├─▶ StatCard.jsx
-                    │     └─▶ ChartCard.jsx (Line, Doughnut, Bar)
-                    ├─▶ DangerMap.jsx
-                    │     └─▶ api.js → api()
-                    │     └─▶ react-leaflet (MapContainer, TileLayer, Marker, Popup)
-                    │     └─▶ leaflet.markercluster + leaflet.heat
-                    ├─▶ Zones.jsx
-                    │     └─▶ api.js → api()
-                    └─▶ Records.jsx
-                          └─▶ api.js → api() (recent + search)
+        └─▶ ErrorBoundary.jsx           (global render-error catcher)
+              └─▶ ThemeProvider          (dark/light context, useTheme.jsx)
+                    └─▶ BrowserRouter
+                          └─▶ Layout.jsx
+                                ├─▶ BDLogo.jsx
+                                ├─▶ useToast.js           (toast hook)
+                                ├─▶ ToastContainer.jsx
+                                ├─▶ AlertBanner.jsx        (high-severity alerts)
+                                ├─▶ api.js → postApi()    (scrape button)
+                                └─▶ <Outlet>              (lazy-loaded pages)
+                                      ├─▶ Dashboard.jsx
+                                      │     ├─▶ api.js → api()
+                                      │     ├─▶ StatCard.jsx
+                                      │     ├─▶ ChartCard.jsx (Line, Doughnut, Bar)
+                                      │     ├─▶ ForecastChart.jsx
+                                      │     ├─▶ TimeHeatmap.jsx
+                                      │     ├─▶ ClusterTimeline.jsx
+                                      │     ├─▶ YoYSummary.jsx
+                                      │     ├─▶ LiveNews.jsx
+                                      │     └─▶ YouTubeNews.jsx
+                                      ├─▶ Daily.jsx
+                                      │     ├─▶ api.js → api()
+                                      │     ├─▶ StatCard.jsx
+                                      │     └─▶ ChartCard.jsx (Pie, Bar)
+                                      ├─▶ Monthly.jsx
+                                      │     ├─▶ api.js → api()
+                                      │     ├─▶ StatCard.jsx
+                                      │     └─▶ ChartCard.jsx (Line, Doughnut, Bar)
+                                      ├─▶ DangerMap.jsx
+                                      │     ├─▶ api.js → api()
+                                      │     └─▶ react-leaflet + markercluster + leaflet.heat
+                                      ├─▶ Zones.jsx
+                                      │     └─▶ api.js → api()  (danger-zones + danger-index)
+                                      ├─▶ Compare.jsx
+                                      │     └─▶ api.js → api()  (compare/monthly + compare/yearly)
+                                      ├─▶ SearchPage.jsx
+                                      │     └─▶ api.js → api()  (search with filters)
+                                      ├─▶ Records.jsx
+                                      │     └─▶ api.js → api()  (recent + search)
+                                      └─▶ NotFound.jsx           (404 catch-all)
 ```
 
 ### Third-party Libraries
 
 | Layer | Library | Purpose |
 |-------|---------|---------|
-| Backend | `fastapi` | HTTP framework, request validation |
-| Backend | `fastapi` (CORSMiddleware) | Cross-origin request support |
+| Backend | `fastapi` | HTTP framework, request validation, dependency injection |
+| Backend | `starlette` (`BaseHTTPMiddleware`) | Base class for `SecurityHeadersMiddleware` |
+| Backend | `fastapi` (`CORSMiddleware`) | Cross-origin request support |
 | Backend | `uvicorn` | ASGI server |
 | Backend | `beautifulsoup4` + `lxml` | HTML parsing |
 | Backend | `requests` | HTTP client for scraping |
 | Backend | `apscheduler` | Background job scheduling |
+| Testing | `pytest` + `pytest-asyncio` | Backend test runner + async test support |
+| Testing | `httpx` | AsyncClient for API route integration tests |
 | Frontend | `react` + `react-dom` | UI rendering |
 | Frontend | `react-router-dom` | Client-side routing |
 | Frontend | `chart.js` + `react-chartjs-2` | Charts (line, bar, doughnut, pie) |
@@ -941,7 +1084,9 @@ main.jsx
 | Frontend | `leaflet.heat` | Heatmap layer |
 | Frontend | `react-icons` | Icon library (Font Awesome set) |
 | Build | `vite` + `@vitejs/plugin-react` | Frontend bundler + dev server |
+| Testing | `vitest` | Frontend test runner (jsdom environment) |
+| Testing | `@testing-library/react` + `@testing-library/jest-dom` | Component rendering + DOM assertions |
 
 ---
 
-*Last updated: February 2026*
+*Last updated: February 2026 — reflects security middleware, rate limiting, full analytics API, lazy-loaded routes, ErrorBoundary, testing suite, and updated CI pipeline.*
