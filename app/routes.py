@@ -2,21 +2,33 @@
 FastAPI route definitions.
 Separated from server setup for clarity.
 """
+import io
+import csv
+import json
 import logging
+import os
 import re
+import shutil
 import threading
+import uuid
 from datetime import date, datetime
-from typing import Optional
-from fastapi import APIRouter, Query, HTTPException, Depends, Request
+from typing import List, Optional
+from fastapi import APIRouter, File, Form, Query, HTTPException, Depends, Request, UploadFile
+from fastapi.responses import StreamingResponse
 
 import requests
 from app.rate_limit import scrape_limiter
 from app import database as db
+from app.config import STATIC_DIR
 from app.scraper import run_scraper
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+# Directory where uploaded report images are stored
+UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads", "reports")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 # ─── Overview ───────────────────────────────────────────────────
@@ -969,3 +981,105 @@ async def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=traffic_insight_bd_data.csv"},
     )
+
+
+# ─── Community Reports ─────────────────────────────────────────
+
+@router.get("/reports")
+async def get_reports(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    district: Optional[str] = Query(None),
+    division: Optional[str] = Query(None),
+    accident_type: Optional[str] = Query(None),
+):
+    """Get community-submitted incident reports, newest first."""
+    return db.get_reports(
+        limit=limit,
+        offset=offset,
+        district=district or None,
+        division=division or None,
+        accident_type=accident_type or None,
+    )
+
+
+@router.get("/reports/{report_id}")
+async def get_report(report_id: int):
+    """Get a single community report by ID."""
+    report = db.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+
+@router.post("/reports/{report_id}/upvote")
+async def upvote_report(report_id: int):
+    """Upvote a community report."""
+    report = db.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    new_count = db.upvote_report(report_id)
+    return {"upvotes": new_count}
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_IMAGE_SIZE = 8 * 1024 * 1024   # 8 MB per file
+MAX_IMAGES = 5
+
+
+@router.post("/reports", status_code=201)
+async def submit_report(
+    title: str = Form(..., min_length=5, max_length=200),
+    description: str = Form(""),
+    incident_date: str = Form(...),
+    incident_time: str = Form(""),
+    location_text: str = Form(""),
+    district: str = Form(""),
+    division: str = Form(""),
+    accident_type: str = Form("Road Accident"),
+    fatalities: int = Form(0, ge=0),
+    injuries: int = Form(0, ge=0),
+    reporter_name: str = Form("Anonymous", max_length=80),
+    images: List[UploadFile] = File(default=[]),
+):
+    """Submit a new community incident report with optional image uploads."""
+    # Validate date
+    try:
+        datetime.strptime(incident_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="incident_date must be YYYY-MM-DD")
+
+    # Validate and save images
+    saved_paths: list[str] = []
+    if images:
+        for img in images[:MAX_IMAGES]:
+            if img.content_type not in ALLOWED_IMAGE_TYPES:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Unsupported image type: {img.content_type}. Use JPEG, PNG, WebP or GIF.",
+                )
+            data = await img.read()
+            if len(data) > MAX_IMAGE_SIZE:
+                raise HTTPException(status_code=422, detail=f"Image '{img.filename}' exceeds 8 MB limit.")
+            ext = img.filename.rsplit(".", 1)[-1].lower() if img.filename and "." in img.filename else "jpg"
+            filename = f"{uuid.uuid4().hex}.{ext}"
+            dest = os.path.join(UPLOADS_DIR, filename)
+            with open(dest, "wb") as f:
+                f.write(data)
+            saved_paths.append(f"/uploads/reports/{filename}")
+
+    report_id = db.insert_report(
+        title=title,
+        description=description,
+        incident_date=incident_date,
+        incident_time=incident_time or None,
+        location_text=location_text,
+        district=district or None,
+        division=division or None,
+        accident_type=accident_type,
+        fatalities=fatalities,
+        injuries=injuries,
+        reporter_name=reporter_name or "Anonymous",
+        images=saved_paths,
+    )
+    return {"id": report_id, "images": saved_paths}

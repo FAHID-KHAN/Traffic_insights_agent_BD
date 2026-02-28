@@ -13,8 +13,9 @@ const DangerMap  = lazy(() => import('./pages/DangerMap'));
 const Zones      = lazy(() => import('./pages/Zones'));
 const Records    = lazy(() => import('./pages/Records'));
 const Compare    = lazy(() => import('./pages/Compare'));
-const SearchPage = lazy(() => import('./pages/SearchPage'));
-const NotFound   = lazy(() => import('./pages/NotFound'));
+const SearchPage     = lazy(() => import('./pages/SearchPage'));
+const CommunityFeed  = lazy(() => import('./pages/CommunityFeed'));
+const NotFound       = lazy(() => import('./pages/NotFound'));
 
 /* ── Inline fallback shown while a lazy chunk loads ─────────── */
 function PageLoader() {
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="compare" element={<Compare />} />
                 <Route path="search" element={<SearchPage />} />
                 <Route path="records" element={<Records />} />
+                <Route path="community" element={<CommunityFeed />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>

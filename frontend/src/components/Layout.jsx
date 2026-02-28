@@ -1,5 +1,5 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaHeart, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaHeart, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload, FaUsers } from 'react-icons/fa';
 import { useState } from 'react';
 import { postApi } from '../utils/api';
 import ToastContainer from './ToastContainer';
@@ -17,6 +17,7 @@ const tabs = [
   { to: '/compare', icon: <FaBalanceScale />, label: 'Compare' },
   { to: '/search', icon: <FaSearch />, label: 'Search' },
   { to: '/records', icon: <FaList />, label: 'Records' },
+  { to: '/community', icon: <FaUsers />, label: 'Community' },
 ];
 
 export default function Layout() {

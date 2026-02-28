@@ -108,6 +108,11 @@ def create_app() -> FastAPI:
     if os.path.isdir(assets_dir):
         application.mount("/assets", StaticFiles(directory=assets_dir), name="react-assets")
 
+    # User-uploaded images from community incident reports
+    uploads_dir = os.path.join(STATIC_DIR, "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    application.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
     # SPA catch-all: serve React index.html for all non-API routes
     @application.get("/{path:path}")
     async def serve_react_spa(path: str = ""):
