@@ -7,3 +7,20 @@ data/*.db
 # Frontend
 node_modules/
 static/dist/
+
+# Environment overrides (keep .env.development and .env.production tracked)
+.env.local
+.env.*.local
+
+# Docker volumes / backups
+backups/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

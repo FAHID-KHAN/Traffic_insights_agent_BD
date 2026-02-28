@@ -12,9 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import database as db
-from app.config import STATIC_DIR
+from app.config import STATIC_DIR, APP_ENV, DEBUG, LOG_LEVEL, CORS_ORIGINS
 from app.routes import router as api_router
 
+# Configure logging based on environment
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 # React production build directory
@@ -45,12 +50,15 @@ def create_app() -> FastAPI:
         description="Real-time accident data analysis from The Daily Star Bangladesh",
         version="1.0.0",
         lifespan=lifespan,
+        docs_url="/docs" if DEBUG else None,
+        redoc_url="/redoc" if DEBUG else None,
     )
 
-    # CORS middleware — allows dev proxy and external access
+    # CORS middleware
+    origins = [o.strip() for o in CORS_ORIGINS.split(",")]
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

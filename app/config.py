@@ -1,21 +1,27 @@
 """
 Configuration settings for the Traffic Insights Agent.
+Supports dev / prod environments via APP_ENV environment variable.
 """
 import os
 
+# ─── Environment ───────────────────────────────────────────────
+APP_ENV = os.getenv("APP_ENV", "development")       # "development" | "production"
+DEBUG = APP_ENV == "development"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
+
 # ─── Base Paths ────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-DB_PATH = os.path.join(DATA_DIR, "accidents.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "accidents.db"))
 
 # ─── Scraper Settings ──────────────────────────────────────────
 DAILY_STAR_BASE_URL = "https://www.thedailystar.net"
 DAILY_STAR_ACCIDENT_URL = "https://www.thedailystar.net/tags/road-accident"
-SCRAPE_INTERVAL_HOURS = 6
-REQUEST_TIMEOUT = 30
-REQUEST_DELAY = 2
-MAX_PAGES_PER_SCRAPE = 5
+SCRAPE_INTERVAL_HOURS = int(os.getenv("SCRAPE_INTERVAL_HOURS", "6"))
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
+REQUEST_DELAY = int(os.getenv("REQUEST_DELAY", "2"))
+MAX_PAGES_PER_SCRAPE = int(os.getenv("MAX_PAGES", "5"))
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -60,8 +66,9 @@ ACCIDENT_TYPES = [
 ]
 
 # ─── Server Settings ───────────────────────────────────────────
-API_HOST = "0.0.0.0"
-API_PORT = 8000
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")   # comma-separated in prod
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
