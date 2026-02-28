@@ -2726,3 +2726,195 @@ tr:hover td { background: var(--bg-card-hover); }
   .splash-logo svg { width: 64px; height: 64px; }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE LOADER  – shown by <Suspense> while lazy chunks load
+   ═══════════════════════════════════════════════════════════════ */
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.page-loader-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border, #334155);
+  border-top-color: var(--bd-green, #006A4E);
+  border-radius: 50%;
+  animation: loaderSpin 0.8s linear infinite;
+}
+
+.page-loader p {
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+}
+
+@keyframes loaderSpin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ERROR BOUNDARY  – fallback UI for unhandled React errors
+   ═══════════════════════════════════════════════════════════════ */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--bg-primary, #0f172a);
+  color: var(--text-primary, #f1f5f9);
+}
+
+.error-boundary-content {
+  text-align: center;
+  max-width: 480px;
+}
+
+.error-boundary-icon {
+  font-size: 3.5rem;
+  color: var(--bd-red, #F42A41);
+  margin-bottom: 1rem;
+}
+
+.error-boundary-content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.error-boundary-message {
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.error-boundary-details {
+  text-align: left;
+  margin-bottom: 1.5rem;
+  background: var(--bg-secondary, #1e293b);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, #334155);
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #94a3b8);
+  user-select: none;
+}
+
+.error-boundary-details pre {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--bd-red, #F42A41);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary-btn {
+  padding: 0.6rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid var(--border, #334155);
+  background: var(--bg-secondary, #1e293b);
+  color: var(--text-primary, #f1f5f9);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.error-boundary-btn:hover {
+  background: var(--bg-tertiary, #334155);
+  border-color: var(--text-secondary, #94a3b8);
+}
+
+.error-boundary-btn.primary {
+  background: var(--bd-green, #006A4E);
+  border-color: var(--bd-green, #006A4E);
+  color: #fff;
+}
+
+.error-boundary-btn.primary:hover {
+  background: var(--bd-green-bright, #00a878);
+  border-color: var(--bd-green-bright, #00a878);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   404 NOT FOUND PAGE
+   ═══════════════════════════════════════════════════════════════ */
+.not-found-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 65vh;
+  padding: 2rem;
+}
+
+.not-found-content {
+  text-align: center;
+  max-width: 420px;
+}
+
+.not-found-icon {
+  font-size: 3.5rem;
+  color: var(--bd-green, #006A4E);
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.not-found-code {
+  font-size: 5rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, var(--bd-green, #006A4E), var(--bd-red, #F42A41));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.not-found-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary, #f1f5f9);
+}
+
+.not-found-message {
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.not-found-btn {
+  display: inline-block;
+  padding: 0.6rem 1.8rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  background: var(--bd-green, #006A4E);
+  color: #fff;
+  transition: background 0.2s;
+}
+
+.not-found-btn:hover {
+  background: var(--bd-green-bright, #00a878);
+}
+
