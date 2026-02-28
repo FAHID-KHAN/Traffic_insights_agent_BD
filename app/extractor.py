@@ -1,6 +1,6 @@
 """Compatibility wrapper for LLM-based extraction.
 
-Regex extraction has been removed. This module now delegates to the Ollama extractor.
+Regex extraction has been removed. This module now delegates to the OpenAI extractor.
 """
 from __future__ import annotations
 

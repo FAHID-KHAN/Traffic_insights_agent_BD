@@ -6,15 +6,15 @@ import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from pydantic import ValidationError
 
-from app.config import BANGLADESH_DISTRICTS, DATA_DIR
+from app.config import DATA_DIR
 from app.database import insert_accident
 from app.geo import DISTRICT_COORDINATES, district_to_division
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
-from app.llm.ollama_client import OllamaClient, OllamaClientError
+from app.llm.openai_client import OpenAIClient, OpenAIClientError
 from app.normalize import normalize_district
 
 logger = logging.getLogger(__name__)
@@ -29,12 +29,65 @@ _SYSTEM_PROMPT = (
     "If multiple accidents are described, return multiple entries."
 )
 
+_NON_DISTRICT_LOCATIONS = {
+    "Tongi", "Savar", "Keraniganj", "Uttara", "Mirpur", "Mohammadpur",
+    "Dhanmondi", "Gulshan", "Motijheel", "Jatrabari", "Demra", "Tejgaon",
+    "Turag", "Gabtali", "Ashulia",
+}
+
+_ALLOWED_DISTRICTS = sorted(
+    district for district in DISTRICT_COORDINATES.keys() if district not in _NON_DISTRICT_LOCATIONS
+)
+
+# FORCING LLM to respond in this JSON Structure--------------------------
+_EXTRACTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "accidents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "accident_type": {"type": ["string", "null"]},
+                    "location_raw": {"type": ["string", "null"]},
+                    "district": {"type": ["string", "null"]},
+                    "division": {"type": ["string", "null"]},
+                    "deaths": {"type": "integer", "minimum": 0},
+                    "injuries": {"type": "integer", "minimum": 0},
+                    "vehicles_involved": {
+                        "type": ["array", "null"],
+                        "items": {"type": "string"},
+                    },
+                    "accident_date": {"type": ["string", "null"]},
+                    "summary": {"type": ["string", "null"]},
+                    "confidence": {"type": ["number", "null"]},
+                },
+                "required": [
+                    "accident_type",
+                    "location_raw",
+                    "district",
+                    "division",
+                    "deaths",
+                    "injuries",
+                    "vehicles_involved",
+                    "accident_date",
+                    "summary",
+                    "confidence",
+                ],
+            },
+        }
+    },
+    "required": ["accidents"],
+}
+
 
 class LLMAccidentExtractor:
-    """Extracts one or more accidents from an article using Ollama."""
+    """Extracts one or more accidents from an article using OpenAI."""
 
-    def __init__(self, client: Optional[OllamaClient] = None):
-        self.client = client or OllamaClient()
+    def __init__(self, client: Optional[OpenAIClient] = None):
+        self.client = client or OpenAIClient()
 
     def extract_events(
         self,
@@ -55,12 +108,15 @@ class LLMAccidentExtractor:
         ]
 
         try:
-            raw_content = self.client.chat_json(messages)
+            raw_content = self.client.chat_json(
+                messages,
+                response_schema=_EXTRACTION_SCHEMA,
+            )
             self._log_response(article_id=article_id, raw_response=raw_content)
             payload = self._parse_json_payload(raw_content)
             result = ExtractionResult.model_validate(payload)
             return result.accidents
-        except (OllamaClientError, json.JSONDecodeError, ValidationError, ValueError) as exc:
+        except (OpenAIClientError, json.JSONDecodeError, ValidationError, ValueError) as exc:
             self._log_failure("extract_events", exc, content_preview=content[:500], raw_response=locals().get("raw_content"))
             return []
 
@@ -75,6 +131,8 @@ class LLMAccidentExtractor:
 
         for event in accidents:
             district = normalize_district(event.district)
+            if district and district not in _ALLOWED_DISTRICTS:
+                district = None
             division = (event.division.strip() if event.division else None) or (
                 district_to_division(district) if district else None
             )
@@ -110,7 +168,7 @@ class LLMAccidentExtractor:
         return inserted_ids
 
     def _build_user_prompt(self, content: str, published_date: Optional[date]) -> str:
-        district_list = ", ".join(BANGLADESH_DISTRICTS)
+        district_list = ", ".join(_ALLOWED_DISTRICTS)
         pub = published_date.isoformat() if published_date else "null"
         return (
             f"Published date: {pub}\n\n"
@@ -125,6 +183,8 @@ class LLMAccidentExtractor:
             "Rules:\n"
             "- Return ONLY JSON.\n"
             "- district must be one from allowed list or null.\n"
+            "- Do not output locality names (e.g., Uttara, Mirpur, Tongi) as district.\n"
+            "- Never generate latitude/longitude. Coordinates are handled by backend mapping.\n"
             "- If multiple accidents are described, return multiple entries.\n"
             "- Do not invent counts; if unclear use 0.\n"
             "- accident_date must be ISO date if explicitly present; otherwise null.\n"

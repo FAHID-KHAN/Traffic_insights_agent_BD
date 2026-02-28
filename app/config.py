@@ -2,6 +2,9 @@
 Configuration settings for the Traffic Insights Agent.
 """
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ─── Base Paths ────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,10 +67,10 @@ API_HOST = "0.0.0.0"
 API_PORT = 8000
 
 # ─── LLM Extraction Settings ────────────────────────────────────
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.2"
-OLLAMA_TIMEOUT_SECONDS = 60
-OLLAMA_RETRIES = 2
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
+OPENAI_RETRIES = int(os.getenv("OPENAI_RETRIES", "2"))
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)

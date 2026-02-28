@@ -4,7 +4,7 @@
 - `run.py`: local entry point (`uvicorn` app loader).
 - `app/`: backend code.
 - `app/scraper.py`: Daily Star scraping pipeline.
-- `app/llm/`: Ollama integration (`ollama_client.py`, `llm_schema.py`, `llm_extractor.py`).
+- `app/llm/`: OpenAI integration (`openai_client.py`, `llm_schema.py`, `llm_extractor.py`).
 - `app/database.py`: SQLite schema and query helpers.
 - `app/routes.py`: FastAPI API endpoints.
 - `app/geo.py`, `app/normalize.py`: district normalization, division mapping, coordinates.
@@ -15,9 +15,9 @@
 - Setup:
   - `python3 -m venv .venv && source .venv/bin/activate`
   - `pip install -r requirements.txt`
-- Run Ollama (required for extraction):
-  - `ollama serve`
-  - `ollama pull llama3.2`
+- Configure API key:
+  - `cp .env.example .env`
+  - set `OPENAI_API_KEY` in `.env`
 - Run app:
   - `python run.py`
 - Trigger scrape manually:
@@ -51,5 +51,5 @@
 
 ## Security & Configuration Tips
 - Do not commit `data/*.db`, local logs, or secrets.
-- Keep Ollama endpoint/model configurable through `app/config.py`.
+- Keep OpenAI model/timeouts configurable through `app/config.py` and `.env`.
 - Validate and sanitize LLM outputs before DB insertion (Pydantic schema is required).
