@@ -10,6 +10,16 @@ import 'leaflet.heat';
 import { api, formatDate } from '../utils/api';
 import { FaMapPin, FaFire, FaBuilding, FaSkullCrossbones, FaCarCrash, FaUserInjured, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
+function MapInvalidator() {
+  const map = useMap();
+  useEffect(() => {
+    // Force Leaflet to recalculate tile coverage after the container fully paints
+    const t = setTimeout(() => map.invalidateSize(), 150);
+    return () => clearTimeout(t);
+  }, [map]);
+  return null;
+}
+
 function MapLayers({ data, mode }) {
   const map = useMap();
   const clusterRef = useRef(null);
@@ -121,7 +131,9 @@ export default function DangerMap() {
             attribution='&copy; OpenStreetMap, &copy; CARTO'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             maxZoom={18}
+            updateWhenIdle={false}
           />
+          <MapInvalidator />
           <MapLayers data={data} mode={mode} />
         </MapContainer>
       </div>

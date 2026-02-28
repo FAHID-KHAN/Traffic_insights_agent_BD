@@ -1,5 +1,5 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaHeart, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload, FaUsers } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload, FaUsers } from 'react-icons/fa';
 import { useState } from 'react';
 import { postApi } from '../utils/api';
 import ToastContainer from './ToastContainer';
@@ -152,13 +152,7 @@ export default function Layout() {
         </div>
 
         <div className="footer-bottom">
-          <p>
-            Made with <FaHeart className="heart-icon" /> in Bangladesh &bull;
-            &copy; {new Date().getFullYear()} Traffic Insight BD
-          </p>
-          <p className="footer-tech">
-            Built with React &middot; FastAPI &middot; Chart.js &middot; Leaflet
-          </p>
+          <p>&copy; {new Date().getFullYear()} Traffic Insight BD</p>
         </div>
       </footer>
     </div>
