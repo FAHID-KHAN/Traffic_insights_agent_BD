@@ -18,4 +18,9 @@ export default defineConfig({
     outDir: path.resolve(__dirname, '../static/dist'),
     emptyOutDir: true,
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/__tests__/setup.js',
+  },
 })

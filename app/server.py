@@ -6,14 +6,47 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import database as db
 from app.config import STATIC_DIR, APP_ENV, DEBUG, LOG_LEVEL, CORS_ORIGINS
 from app.routes import router as api_router
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adds standard security headers to every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=()"
+        )
+        # HSTS — only in production to avoid dev issues
+        if APP_ENV == "production":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
+        # CSP — allow inline styles (needed for Leaflet/Chart.js),
+        # restrict scripts to self + CDN, images to self + tile servers
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https://*.tile.openstreetmap.org https://img.youtube.com; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-src https://www.youtube.com; "
+            "object-src 'none'; "
+            "base-uri 'self'"
+        )
+        return response
 
 # Configure logging based on environment
 logging.basicConfig(
@@ -63,6 +96,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Security headers
+    application.add_middleware(SecurityHeadersMiddleware)
 
     # API routes
     application.include_router(api_router)

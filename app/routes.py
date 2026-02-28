@@ -7,9 +7,10 @@ import re
 import threading
 from datetime import date, datetime
 from typing import Optional
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends, Request
 
 import requests
+from app.rate_limit import scrape_limiter
 from app import database as db
 from app.scraper import run_scraper
 
@@ -155,8 +156,8 @@ async def get_scrape_logs(limit: int = Query(20, ge=1, le=100)):
 
 
 @router.post("/scrape")
-async def trigger_scrape():
-    """Trigger a scrape cycle. Runs in a thread pool to avoid blocking the event loop."""
+async def trigger_scrape(request: Request, _=Depends(scrape_limiter)):
+    """Trigger a scrape cycle. Rate-limited to 3 req/min per IP."""
     import asyncio
     try:
         loop = asyncio.get_event_loop()
