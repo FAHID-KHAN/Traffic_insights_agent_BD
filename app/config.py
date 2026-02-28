@@ -63,5 +63,11 @@ ACCIDENT_TYPES = [
 API_HOST = "0.0.0.0"
 API_PORT = 8000
 
+# ─── LLM Extraction Settings ────────────────────────────────────
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2"
+OLLAMA_TIMEOUT_SECONDS = 60
+OLLAMA_RETRIES = 2
+
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)

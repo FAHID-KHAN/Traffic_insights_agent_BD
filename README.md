@@ -1,19 +1,20 @@
 # Traffic Insights Agent - Bangladesh 🇧🇩
 
-**Real-time road accident analysis dashboard** powered by automated web scraping from **The Daily Star Bangladesh**.
+**Real-time road accident analysis dashboard** powered by automated web scraping from **The Daily Star Bangladesh** and **LLM-based extraction (Ollama / Llama 3.2)**.
 
-This application scrapes, processes, and visualizes road accident data to identify danger zones, track casualties, and provide daily/monthly analysis — helping raise awareness about road safety in Bangladesh.
+This application scrapes, processes, and visualizes road accident data to identify danger zones, track casualties, and provide daily/monthly analysis.
 
 ---
 
 ## Features
 
-- **Automated Web Scraping** — Scrapes accident news from The Daily Star's road-accident tag page every 6 hours
-- **NLP Data Extraction** — Automatically extracts accident type, location (district/division), death & injury counts, vehicles involved
+- **Automated Web Scraping** — Scrapes accident news from The Daily Star road-accident tag page every 6 hours
+- **LLM Data Extraction** — Uses Ollama (`llama3.2`) to extract accident type, location, casualties, vehicles, and event date
+- **Multi-Event Support** — One article can produce multiple accident records
 - **Interactive Dashboard** — Real-time overview with charts showing trends, accident types, and danger districts
 - **Daily Analysis** — Date-specific breakdown of accidents, deaths, injuries by type and location
-- **Monthly Analysis** — Monthly aggregates with daily breakdown charts, top danger zones
-- **Danger Zone Map** — Interactive Leaflet map with marker clusters and heatmap visualization
+- **Monthly Analysis** — Monthly aggregates with daily breakdown charts and top danger zones
+- **Danger Zone Map** — Leaflet map with marker clusters and heatmap visualization
 - **Danger Zone Rankings** — Top accident-prone districts ranked by frequency and severity
 - **Searchable Records** — Full accident database with search and filter capabilities
 - **Manual Scrape Trigger** — One-click button to trigger immediate scraping
@@ -26,7 +27,7 @@ This application scrapes, processes, and visualizes road accident data to identi
 |-----------|-----------|
 | **Backend** | Python, FastAPI |
 | **Scraper** | BeautifulSoup4, Requests |
-| **NLP/Extraction** | Regex-based entity extraction |
+| **Extraction** | Ollama API + Llama 3.2 + Pydantic validation |
 | **Database** | SQLite |
 | **Frontend** | HTML5, CSS3, Vanilla JavaScript |
 | **Charts** | Chart.js |
@@ -37,128 +38,144 @@ This application scrapes, processes, and visualizes road accident data to identi
 
 ## Project Structure
 
-```
+```text
 Traffic_insights_agent_BD/
-├── run.py                  # Entry point — starts the server
-├── requirements.txt        # Python dependencies
-├── app/                    # Backend Python package
+├── run.py
+├── requirements.txt
+├── app/
 │   ├── __init__.py
-│   ├── config.py           # Configuration & constants
-│   ├── database.py         # SQLite models & queries
-│   ├── extractor.py        # NLP-based data extraction
-│   ├── routes.py           # FastAPI route definitions
-│   ├── scheduler.py        # APScheduler background job
-│   ├── scraper.py          # Web scraper (The Daily Star)
-│   └── server.py           # Application factory
-├── data/                   # SQLite database (auto-created)
-│   └── accidents.db
-└── static/                 # Frontend assets
-    ├── index.html           # Dashboard markup
-    ├── css/
-    │   └── styles.css       # All styles
+│   ├── config.py              # App + Ollama config
+│   ├── database.py            # SQLite models + query functions
+│   ├── extractor.py           # Compatibility wrapper (delegates to LLM extractor)
+│   ├── geo.py                 # District coordinates + district->division mapping
+│   ├── normalize.py           # District normalization helpers
+│   ├── routes.py              # FastAPI endpoints
+│   ├── scheduler.py           # Periodic scrape scheduler
+│   ├── scraper.py             # Daily Star scraping pipeline
+│   ├── server.py              # FastAPI app factory
+│   └── llm/
+│       ├── __init__.py
+│       ├── ollama_client.py   # Ollama chat client
+│       ├── llm_schema.py      # Pydantic extraction schema
+│       └── llm_extractor.py   # LLM extraction + DB insertion
+├── data/
+│   ├── accidents.db
+│   ├── llm_extraction_responses.log   # Created when LLM responses are logged
+│   └── llm_extraction_failures.log    # Created on extraction failures
+└── static/
+    ├── index.html
+    ├── css/styles.css
     └── js/
-        ├── utils.js         # Shared state & helpers
-        ├── dashboard.js     # Dashboard tab logic
-        ├── daily.js         # Daily analysis tab
-        ├── monthly.js       # Monthly analysis tab
-        ├── map.js           # Leaflet map & heatmap
-        ├── zones.js         # Danger zones tab
-        ├── records.js       # Records table & search
-        └── app.js           # Tab switching & init
+        ├── utils.js
+        ├── dashboard.js
+        ├── daily.js
+        ├── monthly.js
+        ├── map.js
+        ├── zones.js
+        ├── records.js
+        └── app.js
 ```
 
 ---
 
-## Quick Start
+## Quick Start (with Ollama)
 
-### 1. Clone & Navigate
+### 1. Clone and enter project
 
 ```bash
 git clone <your-repo-url>
 cd Traffic_insights_agent_BD
 ```
 
-### 2. Create a Virtual Environment (recommended)
+### 2. Create and activate virtual environment
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate        # macOS / Linux
-# .venv\Scripts\activate         # Windows
+source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
+### 3. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the Application
+### 4. Start Ollama (Terminal 1)
 
 ```bash
+ollama serve
+```
+
+If this is first time, Ollama may generate keys. Then pull model:
+
+```bash
+ollama pull llama3.2
+```
+
+Few Extra Ollama commands: In a new Terminal
+
+```
+ollama run llama3.1:8b
+
+/bye #to terminate
+```
+
+### 5. Run the app (Terminal 2)
+
+```bash
+cd Traffic_insights_agent_BD
+source .venv/bin/activate
 python run.py
 ```
 
-The server starts at **http://localhost:8000** — open it in your browser to see the dashboard.
+Open: **http://localhost:8000**
 
-> **Note:** The SQLite database (`data/accidents.db`) is created automatically on first run. No extra setup needed.
+### 6. Trigger first scrape
 
-### 5. Start Scraping Data
+- Click **Scrape Now** in UI, or
+- Run:
 
-You won't see any data on the dashboard until you run your first scrape:
+```bash
+curl -X POST http://localhost:8000/api/scrape
+```
 
-- Click the **"Scrape Now"** button in the top-right corner of the dashboard, or
-- Manually trigger via API:
-  ```bash
-  curl -X POST http://localhost:8000/api/scrape
-  ```
-- Or just wait — the built-in scheduler scrapes automatically every 6 hours.
+Note:
+- If scrape reports `N found, 0 new`, no new article rows were inserted, so LLM extraction is not re-run for old URLs.
+- To reprocess existing articles through the LLM extractor:
 
-The first scrape may take 1–2 minutes as it fetches and processes articles from The Daily Star.
+```bash
+python3 -c "from app.extractor import reprocess_all_articles; print(reprocess_all_articles())"
+```
 
 ---
 
-## Using the Dashboard
+## Logging
 
-Once the server is running, open **http://localhost:8000** in any browser. The UI is a single-page dark-themed dashboard with six tabs across the top:
+### LLM raw responses
 
-### Dashboard (Home)
+File:
 
-This is the landing page. It shows:
-- **Summary cards** — total accidents, deaths, injuries, today's count, and number of articles scraped.
-- **30-day trend line** — accidents, deaths, and injuries over the last month.
-- **Accident types doughnut** — breakdown of the current month by type (bus crash, hit-and-run, etc.).
-- **Top danger districts bar chart** — the most accident-prone districts.
+- `data/llm_extraction_responses.log`
 
-### Daily Analysis
+Tail command:
 
-Pick any date using the date picker at the top. The page updates with:
-- Stat cards for that day (accidents, deaths, injuries).
-- A pie chart of accident types and a bar chart by district for that specific day.
+```bash
+tail -f data/llm_extraction_responses.log
+```
 
-### Monthly Analysis
+### LLM extraction failures
 
-Select a year and month from the dropdowns. You'll see:
-- Monthly totals plus the daily average.
-- A bar chart showing the day-by-day breakdown within that month.
-- Accident types and top districts for the selected month.
+File:
 
-### Danger Map
+- `data/llm_extraction_failures.log`
 
-An interactive **Leaflet** map centered on Bangladesh. Toggle between two views:
-- **Markers** — clustered circle markers; click a cluster to zoom in, click an individual marker to see accident details (type, date, casualties, link to source article).
-- **Heatmap** — color-coded intensity overlay highlighting the most dangerous areas.
+Tail command:
 
-### Danger Zones
+```bash
+tail -f data/llm_extraction_failures.log
+```
 
-A ranked list of the top 20 most accident-prone **districts**, showing total accidents, deaths, and injuries for each. Cards are sorted by frequency.
-
-### Records
-
-A full searchable table of every extracted accident. Columns include date, type, location, district, deaths, injuries, vehicles, and a link to the original article. Use the search box to filter by location, type, or any keyword.
-
-### Scrape Now Button
-
-The **"Scrape Now"** button in the header triggers an immediate scrape. While running, the button shows a spinner. When done, a toast notification reports how many articles were found and how many were new. The dashboard auto-refreshes with the latest data.
+Both files are created on demand when events are logged.
 
 ---
 
@@ -183,41 +200,43 @@ The **"Scrape Now"** button in the header triggers an immediate scrape. While ru
 
 ## How It Works
 
-1. **Scraping**: The scraper visits The Daily Star's `/tags/road-accident` page, collects article links, and fetches full article content
-
-2. **Extraction**: Each article is processed by the NLP extractor which uses regex patterns to identify:
-   - **Accident type** (bus crash, hit-and-run, collision, etc.)
-   - **Location** (maps to 64 districts + sub-areas of Bangladesh)
-   - **Casualties** (death and injury counts from text)
-   - **Vehicles involved** (bus, truck, motorcycle, etc.)
-
-3. **Storage**: Structured data is stored in SQLite with proper indexing for fast queries
-
-4. **Visualization**: The frontend fetches data via REST APIs and renders interactive charts, maps, and tables
+1. **Scraping**: The scraper visits The Daily Star `/tags/road-accident` pages, collects article links, and fetches content.
+2. **Extraction**: For each new article, the LLM extractor calls Ollama (`llama3.2`) and expects strict JSON output.
+3. **Normalization**:
+   - District names are normalized against Bangladesh aliases.
+   - Division is resolved from mapping when missing.
+   - Coordinates are assigned from hard-coded district coordinate mapping.
+4. **Storage**: One article can insert multiple `accidents` rows (same `article_id`) in SQLite.
+5. **Visualization**: Existing API and frontend modules read the same DB schema and render charts/maps/tables.
 
 ---
 
 ## Configuration
 
-Edit `app/config.py` to customize:
+Edit `app/config.py`:
 
 ```python
-SCRAPE_INTERVAL_HOURS = 6     # Scraping frequency
-MAX_PAGES_PER_SCRAPE = 5      # Pages to scrape per cycle
-REQUEST_DELAY = 2             # Politeness delay between requests
-API_PORT = 8000               # Server port
+SCRAPE_INTERVAL_HOURS = 6
+MAX_PAGES_PER_SCRAPE = 5
+REQUEST_DELAY = 2
+API_PORT = 8000
+
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2"
+OLLAMA_TIMEOUT_SECONDS = 60
+OLLAMA_RETRIES = 2
 ```
 
 ---
 
 ## Data Source
 
-All data is sourced from **[The Daily Star](https://www.thedailystar.net)**, one of Bangladesh's leading English-language newspapers. The scraper specifically targets their [road accident tag](https://www.thedailystar.net/tags/road-accident) page.
+All data is sourced from **[The Daily Star](https://www.thedailystar.net)**, specifically the [road accident tag](https://www.thedailystar.net/tags/road-accident).
 
-> **Disclaimer**: This tool is for educational and awareness purposes. Please respect The Daily Star's terms of service and robots.txt. Use responsibly with appropriate rate limiting.
+> Disclaimer: This tool is for educational and awareness purposes. Respect The Daily Star terms of service and robots.txt.
 
 ---
 
 ## License
 
-MIT License — Use freely for educational and research purposes.
+MIT License

@@ -203,8 +203,8 @@ class DailyStarScraper:
                         total_new += 1
                         logger.info(f"Saved article #{article_id}: {article_data.get('title', '')[:60]}")
 
-                        from app.extractor import AccidentExtractor
-                        AccidentExtractor().process_article(
+                        from app.llm.llm_extractor import LLMAccidentExtractor
+                        LLMAccidentExtractor().process_article(
                             article_id,
                             article_data["content"],
                             article_data.get("published_date"),

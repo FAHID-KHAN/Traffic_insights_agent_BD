@@ -1,0 +1,189 @@
+[2026-02-28T05:47:45.752228] article_id=1
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhaka–Mawa Expressway, Srinagar upazila, Munshiganj","district":"Munshiganj","division":null,"deaths":1,"injuries":1,"vehicles_involved":["truck","truck","ambulance"],"accident_date":"2026-02-28","summary":"One person killed, another seriously injured in truck accident on Dhaka–Mawa Expressway.","confidence":0.5}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:47:59.940849] article_id=2
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Sherpur-Jamalpur road at Shimultoli in Sadar upazila of Sherpur district","district":"Sherpur","division":null,"deaths":2,"injuries":6,"vehicles_involved":["mini-truck","auto-rickshaw"],"accident_date":"2026-02-28","summary":"Mini-truck hits auto-rickshaw, killing 2 and injuring 5 others.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:48:13.116731] article_id=3
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Badda Link Road","district":"Dhaka","division":null,"deaths":1,"injuries":0,"vehicles_involved":["bus","bus"],"accident_date":"2026-02-28","summary":"A 34-year-old bank employee died after being crushed between two buses in Dhaka’s Badda area.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:48:23.773482] article_id=4
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Juhu, Mumbai","district":"Mumbai","division":null,"deaths":0,"injuries":0,"vehicles_involved":["auto rickshaw","Innova","car"],"accident_date":"2026-02-28","summary":"Akshay Kumar’s convoy involved in road accident.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:48:40.113869] article_id=5
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Dhaka-Barishal highway in Madaripur’s Sadar upazila, Millgate area of Ghatakchar union","district":"Madaripur","division":null,"deaths":6,"injuries":10,"vehicles_involved":["bus","auto-rickshaw"],"accident_date":"2026-02-28","summary":"Bus and rickshaw collide on Dhaka-Barishal highway, 6 killed, 10 injured","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:48:54.836621] article_id=6
+raw_response={"accidents":[{"accident_type":"truck overturns","location_raw":"Jhalmolia Banana Market in Puthia upazila of Rajshahi","district":"Rajshahi","division":null,"deaths":4,"injuries":1,"vehicles_involved":["bus","truck","car","motorcycle","ambulance"],"accident_date":"2026-02-28","summary":"At least four people killed, one injured in truck overturn at Jhalmolia Banana Market.","confidence":0.8}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:49:09.975871] article_id=7
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Chakaria upazila, Cox's Bazar-Chattogram highway, Malumghat area","district":"Cox's Bazar","division":"None","deaths":5,"injuries":7,"vehicles_involved":["bus","microbus"],"accident_date":"2026-02-28","summary":"Family of 7 killed in head-on collision on Cox's Bazar-Chattogram highway.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:49:49.694265] article_id=8
+raw_response={"accidents":[{"accident_type":"road crashes","location_raw":"Bengladesh","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle","ambulance"],"accident_date":"2026-02-28", "summary":"National Road Safety Day observed with theme \"Standard Helmets, Safe Speed to Reduce Loss of Life and Property\""}],"accidents":[{"accident_type":"road crashes","location_raw":"Bengladesh","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["truck","car","motorcycle","ambulance"],"accident_date":"2026-02-28", "summary":"National Road Safety Day observed with theme \"Standard Helmets, Safe Speed to Reduce Loss of Life and Property\""}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:50:08.740310] article_id=9
+raw_response={"accidents":[{"accident_type":"road accidents","location_raw":"Chattogram city","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["motorcycle","bus","car","auto-rickshaw","pickup"],"accident_date":null,"summary":"Surge in road accidents reported in Chattogram city.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:50:27.431116] article_id=10
+raw_response={"accidents":[{"accident_type":"road traffic fatalities","location_raw":"Dhaka North City Corporation areas","district":null,"division":null,"deaths":283,"injuries":0,"vehicles_involved":["bus","truck","car","motorcycle","pickup","ambulance"],"accident_date":null,"summary":"Pedestrians, motorcyclists, and cyclists make up 95 percent of reported road traffic fatalities in Dhaka North City Corporation areas.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:50:52.498388] article_id=11
+raw_response={"accidents":[{"accident_type":"road crashes","location_raw":"Bangladesh","district":null,"division":null,"deaths":86690,"injuries":153257,"vehicles_involved":["bus","truck","car","motorcycle","train","boat","auto-rickshaw","rickshaw","microbus","pickup","ambulance"],"accident_date":"2026-02-28","summary":"At least 86,690 people killed and 1,53,257 injured in road crashes over the last 11 years.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:51:22.519280] article_id=12
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhaka, Bangladesh","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["bus","car","ambulance"],"accident_date":"2023-07-24T00:00:00+06:00","summary":"Draft of the three-year plan approved","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:51:59.101420] article_id=13
+raw_response={"accidents":[{"accident_type":"crash","location_raw":"Dhaka-Chattogram highway","district":"Cumilla","division":null,"deaths":4,"injuries":0,"vehicles_involved":["sedan","covered van"],"accident_date":"2026-02-28","summary":"Systemic governance failure","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:52:12.142757] article_id=14
+raw_response={"accidents":[{"accident_type":"bike accident","location_raw":"near Rajshahi University campus","district":"Rajshahi","division":null,"deaths":1,"injuries":0,"vehicles_involved":["auto-rickshaw","motorcycle"],"accident_date":"2026-02-27","summary":"A student killed in collision with auto-rickshaw near university campus.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:52:24.941571] article_id=15
+raw_response={"accidents":[{"accident_type":"car accident","location_raw":"Shologhor area on the Dhaka-Mawa Expressway","district":"Munshiganj","division":null,"deaths":3,"injuries":1,"vehicles_involved":["car","ambulance"],"accident_date":"2026-02-28","summary":"Private car overturned after hitting roadside railing, 3 killed, 1 injured.","confidence":0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:52:40.478453] article_id=16
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Bandarban's Rowangchhari upazila","district":"Bandarban","division":null,"deaths":1,"injuries":7,"vehicles_involved":["Chander Gari"],"accident_date":"2026-02-28","summary":"Woman killed, 7 injured in road accident.","confidence":0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:52:58.153901] article_id=17
+raw_response={"accidents":[{"accident_type":"Road Accident","location_raw":"Abul Khayer Chairman Road in Alaiyarpur union of Begumganj","district":"Noakhali","division":null,"deaths":7,"injuries":0,"vehicles_involved":["microbus","ambulance"],"accident_date":"2026-02-28","summary":"Family of 7 killed in microbus plunge into canal","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:53:31.216756] article_id=18
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhaka-Khulna highway, Kanaipur area","district":"Faridpur","division":null,"deaths":3,"injuries":10,"vehicles_involved":["bus","bus"],"accident_date":"2026-02-27","summary":"Two buses collided head-on on the Dhaka-Khulna highway in Kanaipur area, killing three people and injuring at least 10 others.","confidence":null},{"accident_type":"road accident","location_raw":"Phukra Bazar, Gopalganj","district":"Gopalganj","division":null,"deaths":1,"injuries":1,"vehicles_involved":["truck","auto-rickshaw"],"accident_date":"2026-02-27","summary":"A truck driver died and his assistant was injured after the vehicle fell into a roadside ditch on the Dhaka-Khulna highway.","confidence":null},{"accident_type":"road accident","location_raw":"Padma Railway Station area, Zajira upazila","district":"Shariatpur","division":null,"deaths":2,"injuries":null,"vehicles_involved":["microbus","covered van","passenger bus"],"accident_date":"2026-02-27","summary":"A three-way collision involving a microbus, a covered van, and a passenger bus killed two members of a family.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:53:49.665106] article_id=19
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Bonpara-Hatikumrul highway, Shreerampur area","district":"Natore","division":"None","deaths":7,"injuries":8,"vehicles_involved":["microbus", "truck"], "accident_date":"2026-02-28","summary":"Microbus and truck collide on Natore-bound cement-laden truck","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:53:58.883177] article_id=20
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhakal's Khilkhet area","district":"Dhaka","division":null,"deaths":2,"injuries":0,"vehicles_involved":["lorry","van"],"accident_date":"2026-02-28","summary":"Two cleaners killed by lorry in Dhaka.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:06.720817] article_id=21
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:12.389446] article_id=22
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:18.161833] article_id=23
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:23.850991] article_id=24
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:29.624956] article_id=25
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:35.371978] article_id=26
+raw_response={"accidents":[{"accident_type":null,"location_raw":"Dhaka city","district":"Dhaka","division":"Dhaka","deaths":0,"injuries":0,"vehicles_involved":["bus","car","motorcycle"],"accident_date":"2026-02-28","summary":"Multiple accidents reported in Dhaka city.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:54:53.358212] article_id=27
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Uttara and Bijoy Sarani areas","district":"Uttara","division":null,"deaths":5,"injuries":0,"vehicles_involved":["truck","microbus","motorbike"],"accident_date":"2026-02-27","summary":"Five people killed in two road accidents in capital's Uttara and Bijoy Sarani areas.","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:55:07.671012] article_id=28
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Kaziakadna area on the Mymensingh-Halaughat road","district":"Mymensingh","division":null,"deaths":7,"injuries":10,"vehicles_involved":["bus","human haulier","truck"],"accident_date":"2026-02-27","summary":"Bus and human haulier collide, 7 killed, 10 injured","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:55:33.479989] article_id=29
+raw_response={"accidents":[{"accident_type":"road crash","location_raw":"Ishwardi upazila, Natore Sadar upazila","district":"Pabna","division":null,"deaths":4,"injuries":20,"vehicles_involved":["lorry","motorcycle","auto-rickshaw"],"accident_date":"2026-02-28","summary":"Lorry crashes into motorcycle and roadside stall, killing four people.","confidence":0.0}],"accidents":[{"accident_type":"road crash","location_raw":"China Intersection area, Mymensingh","district":"Mymensingh","division":null,"deaths":1,"injuries":19,"vehicles_involved":["bus"],"accident_date":"2026-02-28","summary":"Bus crashes into road divider, killing one person.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:55:45.544487] article_id=30
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"China Intersection, Mymensingh city","district":"Mymensingh","division":null,"deaths":1,"injuries":19,"vehicles_involved":["bus","pickup"],"accident_date":"2026-02-28","summary":"Bus helper killed, 19 passengers injured in road accident.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:56:10.784287] article_id=31
+raw_response={"accidents":[{"accident_type":"road crash","location_raw":"Sreenagar, Munshiganj","district":"Munshiganj","division":null,"deaths":0,"injuries":55,"vehicles_involved":["motorcycle","pickup"],"accident_date":"2026-02-28","summary":"Motorcycle strikes woman on Eid day.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:56:22.063636] article_id=32
+raw_response={"accidents":[{"accident_type":"motorcyclist accident","location_raw":"Banani, Dhaka","district":"Dhaka","division":null,"deaths":2,"injuries":0,"vehicles_involved":["truck","motorcycle"],"accident_date":"2026-02-28","summary":"Two motorcyclists died after being run over by a concrete mixer truck in Banani.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:56:50.110617] article_id=33
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhaka-Mawa Expressway, Nimatola area, Munshiganj","district":"Munshiganj","division":null,"deaths":5,"injuries":5,"vehicles_involved":["ambulance", "bus"],"accident_date":"2026-02-27","summary":"Ambulance tyre leaked, bus hit parked vehicle from rear.","confidence":0.0}],"accidents":[{"accident_type":"road accident","location_raw":"Dhaka-Tangail highway, Mirzapur upazila","district":"Tangail","division":null,"deaths":3,"injuries":null,"vehicles_involved":["small truck", "low-bed trailer truck"],"accident_date":"2026-02-27","summary":"Small truck rear-ended low-bed trailer truck.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:57:02.536312] article_id=34
+raw_response={"accidents":[{"accident_type":"hit-and-run","location_raw":"Uttara, Azampur BNS Centre","district":"Uttara","division":null,"deaths":1,"injuries":0,"vehicles_involved":["truck","bus"],"accident_date":"2026-02-27","summary":"SSC examinee run over by truck while crossing road.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T05:57:21.075531] article_id=35
+raw_response={"accidents":[{"accident_type":"Collision between a private car and a motorcycle","location_raw":"Kalshi New Road Flyover in Mirpur-12","district":"Mirpur","division":null,"deaths":2,"injuries":0,"vehicles_involved":["motorcycle","car"],"accident_date":"2026-02-27","summary":"Two motorcyclists died in a collision between a private car and a motorcycle on the Kalshi New Road Flyover in Mirpur yesterday.","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:20:40.649035] article_id=37
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Dhaka-Chattogram highway in Lohagara upazila of Chattogram","district":"Chattogram","division":null,"deaths":10,"injuries":2,"vehicles_involved":["bus","microbus"],"accident_date":"2026-02-28","summary":"Passenger bus and microbus collide on Dhaka-Chattogram highway, 10 killed, 2 injured.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:20:53.040173] article_id=38
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Chattogram-Cox's Bazar Highway in Lohagara upazila, Chattogram","district":"Chattogram","division":"None","deaths":5,"injuries":10,"vehicles_involved":["bus","bus"],"accident_date":"2026-02-28","summary":"Two passenger buses collided head-on on the Chattogram-Cox's Bazar Highway in Lohagara upazila, Chattogram.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:21:12.050615] article_id=39
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Chairmanbari, Dhaka's Banani","district":"Dhaka","division":null,"deaths":1,"injuries":1,"vehicles_involved":["truck","car"],"accident_date":"2026-02-28","summary":"Truck hits two female garment workers while they were crossing the road near Chairmanbari area in Dhaka's Banani.","confidence":0.5}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:21:24.165725] article_id=40
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Chairmanbari U-turn in Banani","district":"Banani","division":null,"deaths":1,"injuries":1,"vehicles_involved":["car","auto-rickshaw","pickup"],"accident_date":"2026-02-28","summary":"Female garment worker killed, another injured in road accident.","confidence":0.5}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:21:36.890255] article_id=41
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Banani Chairmanbari road","district":"Dhaka","division":null,"deaths":1,"injuries":1,"vehicles_involved":["truck","car","ambulance"],"accident_date":"2026-02-28","summary":"Female garment worker killed in road accident","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:22:05.815007] article_id=42
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Kushtia town, Phultola area next to the Kushtia-Jhenaidah highway","district":"Kushtia","division":null,"deaths":1,"injuries":2,"vehicles_involved":["truck","car","pickup"],"accident_date":"2026-02-28","summary":"Four-year-old boy killed in road accident with his grandmother.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:22:21.216004] article_id=43
+raw_response={"accidents":[{"accident_type":"Road Accident","location_raw":"Hafizia area on the Dhaka-Chattogram highway","district":"Feni","division":"None","deaths":6,"injuries":9,"vehicles_involved":["pick-up","covered-van","ambulance","microbus","auto-rickshaw","pickup","truck","car","motorcycle","boat","train"],"accident_date":"2026-02-28T19:30:00+06:00","summary":"Pick-up ferrying construction workers hits covered-van on Dhaka-Chattogram highway, 6 killed, 9 injured.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:22:33.382381] article_id=44
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Dhaka-Mawa Expressway, Sreenagar, Munshiganj","district":"Munshiganj","division":null,"deaths":0,"injuries":15,"vehicles_involved":["lorry", "pickup van", "bus", "bus"], "accident_date":"2026-02-28","summary":"Accident involving 4 vehicles on Dhaka-Mawa Expressway in Munshiganj.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:22:47.668329] article_id=45
+raw_response={"accidents":[{"accident_type":"multiple-vehicle-crash","location_raw":"Dhaka-Mawa highway, Munshiganj's Srinagar","district":"Munshiganj","division":null,"deaths":1,"injuries":10,"vehicles_involved":["lorry","private car","bus","microbus","passenger bus"],"accident_date":"2026-02-28","summary":"Man killed, several injured in multiple vehicle crash due to dense fog.","confidence":0.5}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:22:59.574647] article_id=46
+raw_response={"accidents":[{"accident_type":"road traffic accident","location_raw":"ABC regional road, Dhaniakata area, Pekua upazila, Cox's Bazar","district":"Cox's Bazar","division":null,"deaths":5,"injuries":2,"vehicles_involved":["three-wheeler", "dumper truck"], "accident_date":"2026-02-27","summary":"Five people killed in road accident at Pekua upazila.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:23:14.363671] article_id=47
+raw_response={"accidents":[{"accident_type":"three-way collision","location_raw":"Dhaka-Sylhet highway, Kishoreganj's Bhairab upazila","district":"Kishoreganj","division":"None","deaths":5,"injuries":0,"vehicles_involved":["lorry", "pickup van", "CNG-run auto-rickshaw"],"accident_date":"2026-02-28","summary":"Five people killed in three-way collision on Dhaka-Sylhet highway.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:23:27.006361] article_id=48
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Tangail's Madhupur upazila, front of Malauri Government Primary School","district":"Tangail","division":null,"deaths":4,"injuries":2,"vehicles_involved":["bus","pickup truck"],"accident_date":"2026-02-27","summary":"Four people killed in bus-pickup collision","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:23:38.804372] article_id=49
+raw_response={"accidents":[{"accident_type":"head-on collision","location_raw":"Paltan area, Dhaka","district":"Dhaka","division":null,"deaths":1,"injuries":1,"vehicles_involved":["bus","truck","rickshaw"],"accident_date":"2026-02-28","summary":"Battery-run rickshaw crushed after bus-truck collision.","confidence":0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:23:49.471693] article_id=50
+raw_response={"accidents":[{"accident_type":"bus accident","location_raw":"Barishal University","district":"Narayanganj","division":null,"deaths":1,"injuries":0,"vehicles_involved":["bus","pickup"],"accident_date":"2026-02-28","summary":"Bus hits student, kills her.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:24:03.044350] article_id=51
+raw_response={"accidents":[{"accident_type":"Collision","location_raw":"Itakhola-Monohardi road, Narsingdi's Shibpur upazila","district":"Narsingdi","division":null,"deaths":6,"injuries":0,"vehicles_involved":["auto-rickshaw", "truck"], "accident_date":"2026-02-28","summary":"CNG-run auto-rickshaw collided head-on with a truck on Itakhola-Monohardi road in Narsingdi's Shibpur upazila.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:24:12.586596] article_id=52
+raw_response={"accidents":[{"accident_type":"road crashes","location_raw":"","district":"Dhaka","division":"None","deaths":262,"injuries":543,"vehicles_involved":["bus","truck","car","motorcycle","ambulance"],"accident_date":"2026-02-28","summary":"At least 262 people killed, 543 injured in road crashes during Eid-ul-Azha holiday.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:24:23.696935] article_id=53
+raw_response={"accidents":[{"accident_type":"road-crashes","location_raw":"","district":null,"division":null,"deaths":708,"injuries":2426,"vehicles_involved":["bus","truck","car","motorcycle","train","boat","auto-rickshaw","rickshaw","microbus","pickup","ambulance"],"accident_date":"2026-02-28","summary":"At least 708 people killed, 2,426 injured in road crashes last month.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:24:48.187005] article_id=54
+raw_response={"accidents":[{"accident_type":"road crash","location_raw":"Faridpur","district":"Faridpur","division":null,"deaths":15,"injuries":12,"vehicles_involved":["bus","pickup"],"accident_date":"2026-04-16","summary":"Head-on collision between a bus and a pickup claiming 15 lives.","confidence":0.0}],"accidents":[{"accident_type":"road crash","location_raw":"Jhalakathi","district":"Jhalakathi","division":null,"deaths":14,"injuries":12,"vehicles_involved":["truck","vehicle(s) not specified"],"accident_date":"2026-04-17","summary":"Truck ploughed through several vehicles killing 14 and injuring 12 others.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:25:03.916548] article_id=55
+raw_response={"accidents":[{"accident_type":"unimplementable order","location_raw":"","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["bus","truck","car","motorcycle","ambulance"],"accident_date":null,"summary":"Police directive to test vehicle fitness unimplementable due to lack of equipment and timeline.","confidence":0.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:25:19.176094] article_id=56
+raw_response={"accidents":[{"accident_type":"road crashes","location_raw":"","district":"Dhaka","division":"None","deaths":1477,"injuries":1920,"vehicles_involved":["bus","truck","car","motorcycle","ambulance"],"accident_date":"2024-03-01T00:00:00.000Z","summary":"At least 1,477 people were killed and 1,920 others injured in 1,630 road crashes between January and March this year.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:25:31.961142] article_id=57
+raw_response={"accidents":[{"accident_type":"bus accident","location_raw":"near Hazrat Shahjalal International Airport in Dhaka","district":"Dhaka","division":null,"deaths":1,"injuries":0,"vehicles_involved":["bus","motorcycle","pickup"],"accident_date":"2026-02-28","summary":"Raida Paribahan bus rammed a motorcycle, killing an engineer.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:25:42.837818] article_id=58
+raw_response={"accidents":[{"accident_type":"bus rammed motorcycle","location_raw":"Hazrat Shahjalal International Airport, Dhaka","district":"Dhaka","division":null,"deaths":1,"injuries":0,"vehicles_involved":["bus","motorcycle"],"accident_date":"2026-02-27","summary":"Engineer dies after bus crashes into airport boundary wall","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:26:10.361449] article_id=59
+raw_response={"accidents":[{"accident_type":"car accident","location_raw":"Gabkhan Bridge, Jhalakathi","district":"Jhalokati","division":null,"deaths":14,"injuries":12,"vehicles_involved":["auto-rickshaw","truck","car"],"accident_date":"2026-02-27","summary":"Car and auto-rickshaws crushed by cement-laden truck on Gabkhan Bridge.","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:26:22.809761] article_id=60
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Gabkhan Bridge area of Jhalakathi's Sadar upazila","district":"Jhalokati","division":null,"deaths":14,"injuries":0,"vehicles_involved":["truck","three-wheeler","private car"],"accident_date":"2026-02-28","summary":"Truck ploughs through several vehicles, killing 14 people.","confidence":null}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:26:47.896207] article_id=61
+raw_response={"accidents":[{"accident_type":"road accident","location_raw":"Sadarghat Terminal","district":"Pirojpur","division":null,"deaths":5,"injuries":0,"vehicles_involved":["launch","pickup","ambulance"],"accident_date":"2026-04-11T15:00:00+06:00","summary":"Launch mooring line breaks, kills 3 family members","confidence":1.0}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:27:15.035664] article_id=62
+raw_response={"accidents":[{"accident_type":"road accidents","location_raw":"No specific location given","district":null,"division":null,"deaths":0,"injuries":0,"vehicles_involved":["bus","truck","car","motorcycle","ambulance"],"accident_date":"2026-02-28", "summary":"Experts blame authorities' failure to implement measures and lack of commitment to ensure road safety for the spike in accidents."}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:27:28.193397] article_id=63
+raw_response={"accidents":[{"accident_type":"bus hits auto-rickshaw","location_raw":"Kolonipara intersection under Mahiganj Police Station, Rangpur city","district":"Rangpur","division":null,"deaths":3,"injuries":2,"vehicles_involved":["bus","auto-rickshaw"],"accident_date":"2026-02-27","summary":"Bus hits auto-rickshaw in Rangpur city, killing 3 people.","confidence":0.5}]}
+--------------------------------------------------------------------------------
+[2026-02-28T06:27:36.792235] article_id=64
+raw_response={"accidents":[{"accident_type":"road crashes","location_raw":"across the country","district":null,"division":null,"deaths":555,"injuries":1031,"vehicles_involved":["motorcycle","truck","car","bus","pickup","ambulance"],"accident_date":"2026-02-28","summary":"At least 555 people killed, 1031 injured in road crashes last month.","confidence":0.0}]}
+--------------------------------------------------------------------------------
