@@ -1,6 +1,8 @@
+import { useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './utils/useTheme';
 import Layout from './components/Layout';
+import SplashScreen from './components/SplashScreen';
 import Dashboard from './pages/Dashboard';
 import Daily from './pages/Daily';
 import Monthly from './pages/Monthly';
@@ -11,8 +13,15 @@ import Compare from './pages/Compare';
 import SearchPage from './pages/SearchPage';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  const handleSplashFinished = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
   return (
     <ThemeProvider>
+      {showSplash && <SplashScreen onFinished={handleSplashFinished} />}
       <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
