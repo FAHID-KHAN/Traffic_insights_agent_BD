@@ -22,8 +22,9 @@ export default function Monthly() {
     } catch (err) {
       console.error('Monthly stats error:', err);
     }
-  }, [year, month]);
+  }, [year, month]); // eslint-disable-line react-hooks/preserve-manual-memoization
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   const dailyChart = data?.daily_breakdown?.length > 0
