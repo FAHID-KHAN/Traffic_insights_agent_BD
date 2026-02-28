@@ -114,6 +114,17 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_reports_district ON reports(district);
         CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(incident_date);
         CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
+
+        CREATE TABLE IF NOT EXISTS report_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_id INTEGER NOT NULL,
+            author_name TEXT NOT NULL DEFAULT 'Anonymous',
+            body TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_comments_report ON report_comments(report_id);
     """)
 
     conn.commit()
@@ -442,3 +453,33 @@ def upvote_report(report_id: int) -> int:
             "SELECT upvotes FROM reports WHERE id = ?", (report_id,)
         ).fetchone()
         return row["upvotes"] if row else 0
+
+
+# ─── Report Comments ───────────────────────────────────────────
+
+def get_comments(report_id: int) -> list:
+    """Return all comments for a report, oldest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, report_id, author_name, body, created_at
+               FROM report_comments
+               WHERE report_id = ?
+               ORDER BY created_at ASC""",
+            (report_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def insert_comment(report_id: int, author_name: str, body: str) -> dict:
+    """Insert a comment and return the newly created row."""
+    with get_db() as conn:
+        cursor = conn.execute(
+            """INSERT INTO report_comments (report_id, author_name, body)
+               VALUES (?, ?, ?)""",
+            (report_id, author_name or "Anonymous", body.strip()),
+        )
+        row = conn.execute(
+            "SELECT id, report_id, author_name, body, created_at FROM report_comments WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    return dict(row)

@@ -1022,6 +1022,36 @@ async def upvote_report(report_id: int):
     return {"upvotes": new_count}
 
 
+@router.get("/reports/{report_id}/comments")
+async def get_report_comments(report_id: int):
+    """Return all comments for a report (oldest first)."""
+    report = db.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    comments = db.get_comments(report_id)
+    return {"items": comments, "total": len(comments)}
+
+
+@router.post("/reports/{report_id}/comments", status_code=201)
+async def add_report_comment(
+    report_id: int,
+    author_name: str = Form("Anonymous", max_length=80),
+    body: str = Form(..., min_length=1, max_length=1000),
+):
+    """Post a comment on a community report."""
+    report = db.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not body.strip():
+        raise HTTPException(status_code=422, detail="Comment body cannot be empty")
+    comment = db.insert_comment(
+        report_id=report_id,
+        author_name=(author_name or "Anonymous").strip(),
+        body=body,
+    )
+    return comment
+
+
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_IMAGE_SIZE = 8 * 1024 * 1024   # 8 MB per file
 MAX_IMAGES = 5
