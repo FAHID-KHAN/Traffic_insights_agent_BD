@@ -2582,7 +2582,7 @@ tr:hover td { background: var(--bg-card-hover); }
   background: radial-gradient(ellipse at 30% 20%, #0f2a2a 0%, #0a1c1c 50%, #060e0e 100%);
   overflow: hidden;
   opacity: 1;
-  transition: opacity 0.6s ease-out;
+  transition: opacity 0.8s ease-out;
 }
 
 .splash-fade-out {

@@ -11,7 +11,7 @@ export default function SplashScreen({ onFinished }) {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    // Animate progress bar 0→100 over ~1.8s
+    // Animate progress bar 0→100 over ~2.8s
     const interval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
@@ -19,19 +19,19 @@ export default function SplashScreen({ onFinished }) {
           return 100;
         }
         // Ease-out: start fast, slow near end
-        const increment = Math.max(1, Math.floor((100 - prev) / 8));
+        const increment = Math.max(1, Math.floor((100 - prev) / 12));
         return Math.min(prev + increment, 100);
       });
-    }, 50);
+    }, 60);
 
     // Minimum display time ensures the splash isn't just a flash
     const minTimer = setTimeout(() => {
       setFadeOut(true);
-    }, 2000);
+    }, 3200);
 
     const exitTimer = setTimeout(() => {
       onFinished?.();
-    }, 2600); // 2s display + 0.6s fade-out
+    }, 4000); // 3.2s display + 0.8s fade-out
 
     return () => {
       clearInterval(interval);
