@@ -111,6 +111,13 @@ Traffic_insights_agent_BD/
 ├── static/dist/                # Production build (generated)
 ├── data/                       # SQLite database (auto-created)
 │   └── accidents.db
+├── Dockerfile                  # Multi-stage build (Node 22 + Python 3.13)
+├── docker-compose.dev.yml      # Dev environment (port 8000, hot-reload)
+├── docker-compose.prod.yml     # Prod environment (port 80, healthcheck)
+├── Makefile                    # Quick commands for dev/prod workflows
+├── .env.development            # Dev environment variables
+├── .env.production             # Prod environment variables
+├── .dockerignore               # Docker build exclusions
 ├── .github/
 │   ├── workflows/ci.yml        # CI pipeline (lint + test)
 │   └── pull_request_template.md
@@ -343,16 +350,100 @@ The backend has been hardened with the following reliability improvements:
 
 ---
 
+## Deployment
+
+The project supports **local**, **Docker dev**, and **Docker prod** workflows.
+
+### Local (no Docker)
+
+```bash
+make install        # pip install + npm install
+make build-frontend # build React into static/dist/
+make run-local      # APP_ENV=development python run.py
+```
+
+### Docker — Development
+
+```bash
+make dev            # docker compose up (port 8000, live-reload volumes)
+make dev-d          # same, but detached
+make dev-logs       # tail container logs
+make dev-stop       # stop dev container
+```
+
+Dev mode mounts `./app` and `./run.py` as read-only volumes so code changes are picked up on restart without rebuilding the image.
+
+### Docker — Production
+
+```bash
+make prod           # docker compose up -d (port 80, restart: always)
+make prod-logs      # tail prod logs
+make prod-restart   # restart without rebuild
+make prod-stop      # stop prod container
+```
+
+### Utility Commands
+
+```bash
+make status         # show running traffic-insight containers
+make shell-dev      # open shell in dev container
+make shell-prod     # open shell in prod container
+make db-backup      # copy prod DB to backups/ with timestamp
+make clean          # tear down all containers, volumes, and build artifacts
+make help           # list all available targets
+```
+
+### Environment Files
+
+| File | Purpose |
+|------|---------|
+| `.env.development` | Dev defaults — `APP_ENV=development`, `LOG_LEVEL=DEBUG`, `CORS_ORIGINS=*` |
+| `.env.production` | Prod defaults — `APP_ENV=production`, `LOG_LEVEL=WARNING`, restricted CORS |
+| `.env.local` | **Your local overrides** (git-ignored) — create this to customize without touching tracked files |
+
+### Dockerfile
+
+Multi-stage build:
+1. **Stage 1** (`node:22-alpine`) — installs npm deps and runs `npm run build`
+2. **Stage 2** (`python:3.13-slim`) — installs pip deps, copies app code + built frontend, runs `python run.py`
+
+Includes a `HEALTHCHECK` on `/api/overview` and sets `PYTHONUNBUFFERED=1`.
+
+### Recommended Workflow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Local Dev  │ ──▶ │  Docker Dev │ ──▶ │  Docker Prod│
+│  make run-  │     │  make dev   │     │  make prod  │
+│  local      │     │  port 8000  │     │  port 80    │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+Develop locally → test in containerized dev → deploy to prod.
+
+---
+
 ## Configuration
 
-Edit `app/config.py` to customize:
+All settings in `app/config.py` can be overridden via environment variables:
 
-```python
-SCRAPE_INTERVAL_HOURS = 6     # Scraping frequency
-MAX_PAGES_PER_SCRAPE = 5      # Pages to scrape per cycle
-REQUEST_DELAY = 2             # Politeness delay between requests
-API_PORT = 8000               # Server port
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_ENV` | `development` | `development` or `production` |
+| `LOG_LEVEL` | `DEBUG` (dev) / `WARNING` (prod) | Python logging level |
+| `DATA_DIR` | `data/` | Directory for SQLite database |
+| `DB_PATH` | `data/accidents.db` | Database file path |
+| `SCRAPE_INTERVAL_HOURS` | `6` | Scraping frequency |
+| `MAX_PAGES` | `5` | Pages to scrape per cycle |
+| `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
+| `REQUEST_DELAY` | `2` | Politeness delay between requests |
+| `API_HOST` | `0.0.0.0` | Server bind address |
+| `API_PORT` | `8000` | Server port |
+| `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
+
+**In development**, `DEBUG=True` enables auto-reload, debug logging, and Swagger docs at `/docs`.
+
+**In production**, `DEBUG=False` disables Swagger/ReDoc, sets WARNING-level logging, and restricts CORS origins.
 
 ---
 
