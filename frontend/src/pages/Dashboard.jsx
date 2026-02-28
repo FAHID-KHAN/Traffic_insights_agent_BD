@@ -86,7 +86,7 @@ export default function Dashboard() {
           datasets: [
             { label: 'Accidents', data: trend.map((d) => d.accidents), borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.1)', fill: true, tension: 0.4 },
             { label: 'Deaths', data: trend.map((d) => d.deaths || 0), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.4 },
-            { label: 'Injuries', data: trend.map((d) => d.injuries || 0), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.4 },
+            { label: 'Injuries', data: trend.map((d) => d.injuries || 0), borderColor: '#eab308', backgroundColor: 'rgba(234,179,8,0.1)', fill: true, tension: 0.4 },
           ],
         });
       } else {

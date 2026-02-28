@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Link, Outlet } from 'react-router-dom';
 import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaHeart, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload } from 'react-icons/fa';
 import { useState } from 'react';
 import { postApi } from '../utils/api';
@@ -48,19 +48,19 @@ export default function Layout() {
   };
 
   return (
-    <>
+    <div className="app-layout">
       <ToastContainer toasts={toasts} />
       <AlertBanner />
 
       <header className="header">
         <div className="header-content">
-          <div className="logo">
+          <Link to="/" className="logo">
             <BDLogo size={44} />
             <div>
               <h1>Traffic Insight <span className="bd-accent">BD</span></h1>
               <p>Real-time road accident intelligence • Bangladesh</p>
             </div>
-          </div>
+          </Link>
           <div className="header-actions">
             {lastUpdate && <span className="last-update">Last scraped: {lastUpdate}</span>}
             <button className="btn btn-icon theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
@@ -139,12 +139,12 @@ export default function Layout() {
             <h5>About the Creators</h5>
             <div className="footer-creators">
               <div className="creator">
-                <span className="creator-name">Fahid Khan</span>
-                <span className="creator-role">Software Developer</span>
-              </div>
-              <div className="creator">
                 <span className="creator-name">Rafeed Chowdhury</span>
                 <span className="creator-role">AI Software Developer</span>
+              </div>
+              <div className="creator">
+                <span className="creator-name">Fahid Khan</span>
+                <span className="creator-role">Software Developer</span>
               </div>
             </div>
           </div>
@@ -160,6 +160,6 @@ export default function Layout() {
           </p>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

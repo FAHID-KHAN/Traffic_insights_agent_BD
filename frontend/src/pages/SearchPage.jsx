@@ -235,9 +235,18 @@ export default function SearchPage() {
       )}
 
       {searched && results.length === 0 && !loading && (
-        <div className="empty-state">
+        <div className="search-empty-state">
           <FaSearch />
-          <p>No accidents match your filters. Try broadening your search.</p>
+          <h3>No results found</h3>
+          <p>No accidents match your filters. Try broadening your search or adjusting the date range.</p>
+        </div>
+      )}
+
+      {!searched && (
+        <div className="search-empty-state">
+          <FaSearch />
+          <h3>Search accident records</h3>
+          <p>Use the filters above to search across {'\u2014'} by district, accident type, severity, date range, or keywords.</p>
         </div>
       )}
     </div>

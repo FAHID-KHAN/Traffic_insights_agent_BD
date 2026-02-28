@@ -60,7 +60,7 @@ export default function ForecastChart() {
   const colorMap = {
     accidents: { border: '#10b981', bg: 'rgba(16,185,129,0.08)' },
     deaths: { border: '#F42A41', bg: 'rgba(244,42,65,0.08)' },
-    injuries: { border: '#f97316', bg: 'rgba(249,115,22,0.08)' },
+    injuries: { border: '#eab308', bg: 'rgba(234,179,8,0.08)' },
   };
   const c = colorMap[metric];
 

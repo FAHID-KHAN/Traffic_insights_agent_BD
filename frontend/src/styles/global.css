@@ -140,6 +140,9 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 .logo h1 {
   font-size: 1.35rem;
@@ -233,11 +236,22 @@ body {
   border-bottom-color: var(--bd-green-bright);
 }
 
+/* ─── App Layout (sticky footer) ─────────────────────────────── */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 /* ─── Main Content ────────────────────────────────────────────── */
 .main {
   max-width: 1400px;
   margin: 0 auto;
   padding: 1.5rem 2rem;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ─── Timeframe Toolbar ────────────────────────────────────────── */
@@ -903,7 +917,7 @@ tr:hover td { background: var(--bg-card-hover); }
 .site-footer {
   background: linear-gradient(180deg, var(--bg-primary) 0%, #081212 100%);
   border-top: 1px solid var(--border-color);
-  margin-top: 3rem;
+  margin-top: auto;
   padding: 0;
 }
 .footer-content {
@@ -1811,6 +1825,39 @@ tr:hover td { background: var(--bg-card-hover); }
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  flex: 1;
+}
+
+/* ── Empty / Initial State ── */
+.search-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+  gap: 1rem;
+}
+
+.search-empty-state svg {
+  font-size: 3rem;
+  opacity: 0.35;
+  color: var(--bd-green);
+}
+
+.search-empty-state h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.search-empty-state p {
+  font-size: 0.88rem;
+  max-width: 420px;
+  line-height: 1.5;
 }
 
 .search-filters {
@@ -1999,6 +2046,11 @@ tr:hover td { background: var(--bg-card-hover); }
   .search-filter-row { flex-direction: column; }
   .filter-group { min-width: 100%; }
   .search-results-header { flex-direction: column; align-items: flex-start; }
+  .search-empty-state { padding: 2rem 1rem; }
+  .search-empty-state svg { font-size: 2.4rem; }
+  .search-empty-state h3 { font-size: 1rem; }
+  .search-empty-state p { font-size: 0.82rem; }
+  .search-filters { padding: 1rem; }
   .alert-banner { padding: 0.6rem 1rem; flex-wrap: wrap; }
   .alert-banner-text { font-size: 0.78rem; }
 }
@@ -2006,6 +2058,11 @@ tr:hover td { background: var(--bg-card-hover); }
 @media (max-width: 480px) {
   .header-actions { gap: 6px; }
   .header-actions .btn-outline span { display: none; }
+  .search-empty-state { padding: 1.5rem 0.75rem; }
+  .search-filters { padding: 0.75rem; }
+  .search-input { font-size: 0.82rem; padding: 0.6rem 0.65rem 0.6rem 2.25rem; }
+  .filter-group select,
+  .filter-group input[type="date"] { font-size: 0.78rem; }
 }
 
 

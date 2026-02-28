@@ -32,7 +32,7 @@ export default function Monthly() {
         datasets: [
           { label: 'Accidents', data: data.daily_breakdown.map((d) => d.count), backgroundColor: '#06b6d480', borderColor: '#06b6d4', borderWidth: 1 },
           { label: 'Deaths', data: data.daily_breakdown.map((d) => d.deaths || 0), backgroundColor: '#ef444480', borderColor: '#ef4444', borderWidth: 1 },
-          { label: 'Injuries', data: data.daily_breakdown.map((d) => d.injuries || 0), backgroundColor: '#f9731680', borderColor: '#f97316', borderWidth: 1 },
+          { label: 'Injuries', data: data.daily_breakdown.map((d) => d.injuries || 0), backgroundColor: '#eab30880', borderColor: '#eab308', borderWidth: 1 },
         ],
       }
     : null;
