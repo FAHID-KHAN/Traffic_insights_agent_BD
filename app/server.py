@@ -2,6 +2,7 @@
 FastAPI application factory.
 Creates and configures the app instance.
 """
+import os
 import logging
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,9 @@ from app.config import STATIC_DIR
 from app.routes import router as api_router
 
 logger = logging.getLogger(__name__)
+
+# React production build directory
+REACT_DIST = os.path.join(STATIC_DIR, "dist")
 
 
 @asynccontextmanager
@@ -45,12 +49,14 @@ def create_app() -> FastAPI:
     # API routes
     application.include_router(api_router)
 
-    # Static assets
-    application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    # React production build assets (JS/CSS bundles)
+    assets_dir = os.path.join(REACT_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        application.mount("/assets", StaticFiles(directory=assets_dir), name="react-assets")
 
-    # Serve the SPA
-    @application.get("/")
-    async def serve_frontend():
-        return FileResponse(f"{STATIC_DIR}/index.html")
+    # SPA catch-all: serve React index.html for all non-API routes
+    @application.get("/{path:path}")
+    async def serve_react_spa(path: str = ""):
+        return FileResponse(os.path.join(REACT_DIST, "index.html"))
 
     return application

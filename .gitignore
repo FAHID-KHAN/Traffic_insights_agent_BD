@@ -3,3 +3,7 @@ __pycache__/
 *.pyo
 .venv/
 data/*.db
+
+# Frontend
+node_modules/
+static/dist/

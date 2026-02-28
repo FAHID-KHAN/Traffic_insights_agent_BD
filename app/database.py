@@ -206,7 +206,7 @@ def get_monthly_stats(year: int, month: int):
                   COALESCE(SUM(deaths), 0) as total_deaths,
                   COALESCE(SUM(injuries), 0) as total_injuries
            FROM accidents
-           WHERE strftime('%%Y-%%m', accident_date) = ?""",
+           WHERE strftime('%Y-%m', accident_date) = ?""",
         (date_prefix,)
     ).fetchone()
     stats["total_accidents"] = row["total"]
@@ -217,7 +217,7 @@ def get_monthly_stats(year: int, month: int):
         """SELECT accident_date, COUNT(*) as count,
                   SUM(deaths) as deaths, SUM(injuries) as injuries
            FROM accidents
-           WHERE strftime('%%Y-%%m', accident_date) = ?
+           WHERE strftime('%Y-%m', accident_date) = ?
            GROUP BY accident_date ORDER BY accident_date""",
         (date_prefix,)
     ).fetchall()
@@ -226,7 +226,7 @@ def get_monthly_stats(year: int, month: int):
     rows = conn.execute(
         """SELECT accident_type, COUNT(*) as count
            FROM accidents
-           WHERE strftime('%%Y-%%m', accident_date) = ? AND accident_type IS NOT NULL
+           WHERE strftime('%Y-%m', accident_date) = ? AND accident_type IS NOT NULL
            GROUP BY accident_type ORDER BY count DESC""",
         (date_prefix,)
     ).fetchall()
@@ -236,7 +236,7 @@ def get_monthly_stats(year: int, month: int):
         """SELECT district, COUNT(*) as count,
                   SUM(deaths) as deaths, SUM(injuries) as injuries
            FROM accidents
-           WHERE strftime('%%Y-%%m', accident_date) = ? AND district IS NOT NULL
+           WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
            GROUP BY district ORDER BY count DESC""",
         (date_prefix,)
     ).fetchall()

@@ -49,6 +49,8 @@ class DailyStarScraper:
 
         date_str = date_str.strip()
         formats = [
+            "%d %B %Y, %H:%M %p",   # 19 February 2026, 12:08 PM  (Daily Star)
+            "%d %B %Y, %H:%M",      # 19 February 2026, 12:08
             "%Y-%m-%dT%H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S",
             "%Y-%m-%d",
@@ -64,6 +66,22 @@ class DailyStarScraper:
                 return datetime.strptime(date_str, fmt).date()
             except (ValueError, IndexError):
                 continue
+
+        # Regex fallbacks
+        # "19 February 2026, 12:08 PM" — extract just the date portion
+        match = re.search(
+            r"(\d{1,2})\s+(January|February|March|April|May|June|July|"
+            r"August|September|October|November|December)\s+(\d{4})",
+            date_str, re.IGNORECASE,
+        )
+        if match:
+            try:
+                return datetime.strptime(
+                    f"{match.group(1)} {match.group(2)} {match.group(3)}",
+                    "%d %B %Y",
+                ).date()
+            except ValueError:
+                pass
 
         match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
         if match:
@@ -128,19 +146,46 @@ class DailyStarScraper:
         title_tag = soup.select_one("h1") or soup.select_one("h1.title")
         result["title"] = title_tag.get_text(strip=True) if title_tag else ""
 
-        # Published date
-        date_tag = (
-            soup.select_one("time[datetime]")
-            or soup.select_one("meta[property='article:published_time']")
-            or soup.select_one("span.date")
-            or soup.select_one("div.date")
-            or soup.select_one("div.author-info time")
-            or soup.select_one("div.published-at")
-        )
+        # Published date — try multiple strategies
         pub_date = None
+
+        # Strategy 1: The Daily Star uses <span class="text-gray-600 font-medium">
+        # for the published date (e.g. "19 February 2026, 12:08 PM")
+        date_tag = soup.select_one("span.text-gray-600.font-medium")
         if date_tag:
-            date_str = date_tag.get("datetime") or date_tag.get("content") or date_tag.get_text(strip=True)
-            pub_date = self._parse_date(date_str)
+            pub_date = self._parse_date(date_tag.get_text(strip=True))
+
+        # Strategy 2: standard HTML5 / meta tag approaches
+        if not pub_date:
+            for selector in [
+                "time[datetime]",
+                "meta[property='article:published_time']",
+                "span.date",
+                "div.date",
+                "div.author-info time",
+                "div.published-at",
+            ]:
+                tag = soup.select_one(selector)
+                if tag:
+                    date_str = (
+                        tag.get("datetime")
+                        or tag.get("content")
+                        or tag.get_text(strip=True)
+                    )
+                    pub_date = self._parse_date(date_str)
+                    if pub_date:
+                        break
+
+        # Strategy 3: scan JSON-LD for datePublished
+        if not pub_date:
+            for script in soup.find_all("script", {"type": "application/ld+json"}):
+                text = script.string or ""
+                m = re.search(r'"datePublished"\s*:\s*"([^"]+)"', text)
+                if m:
+                    pub_date = self._parse_date(m.group(1))
+                    if pub_date:
+                        break
+
         result["published_date"] = pub_date or date.today()
 
         # Article body

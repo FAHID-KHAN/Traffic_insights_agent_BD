@@ -25,12 +25,14 @@ This application scrapes, processes, and visualizes road accident data to identi
 | Component | Technology |
 |-----------|-----------|
 | **Backend** | Python, FastAPI |
+| **Frontend** | React 19 + Vite |
+| **Routing** | React Router v7 |
+| **Charts** | Chart.js + react-chartjs-2 |
+| **Maps** | React-Leaflet + MarkerCluster + Heatmap |
+| **Icons** | react-icons (Font Awesome) |
 | **Scraper** | BeautifulSoup4, Requests |
 | **NLP/Extraction** | Regex-based entity extraction |
 | **Database** | SQLite |
-| **Frontend** | HTML5, CSS3, Vanilla JavaScript |
-| **Charts** | Chart.js |
-| **Maps** | Leaflet.js + MarkerCluster + Heatmap |
 | **Scheduler** | APScheduler |
 
 ---
@@ -39,32 +41,49 @@ This application scrapes, processes, and visualizes road accident data to identi
 
 ```
 Traffic_insights_agent_BD/
-├── run.py                  # Entry point — starts the server
-├── requirements.txt        # Python dependencies
-├── app/                    # Backend Python package
+├── run.py                      # Entry point — starts the server
+├── requirements.txt            # Python dependencies
+├── app/                        # Backend Python package
 │   ├── __init__.py
-│   ├── config.py           # Configuration & constants
-│   ├── database.py         # SQLite models & queries
-│   ├── extractor.py        # NLP-based data extraction
-│   ├── routes.py           # FastAPI route definitions
-│   ├── scheduler.py        # APScheduler background job
-│   ├── scraper.py          # Web scraper (The Daily Star)
-│   └── server.py           # Application factory
-├── data/                   # SQLite database (auto-created)
+│   ├── config.py               # Configuration & constants
+│   ├── database.py             # SQLite models & queries
+│   ├── extractor.py            # NLP-based data extraction
+│   ├── routes.py               # FastAPI route definitions
+│   ├── scheduler.py            # APScheduler background job
+│   ├── scraper.py              # Web scraper (The Daily Star)
+│   └── server.py               # Application factory
+├── frontend/                   # React + Vite frontend
+│   ├── index.html              # HTML entry point
+│   ├── package.json            # Node dependencies
+│   ├── vite.config.js          # Vite config (proxy + build output)
+│   └── src/
+│       ├── main.jsx            # React entry point
+│       ├── App.jsx             # Router with 6 routes
+│       ├── styles/
+│       │   └── global.css      # Dark theme styles
+│       ├── utils/
+│       │   ├── api.js          # Fetch helpers, COLORS, formatDate
+│       │   └── useToast.js     # Toast notification hook
+│       ├── components/
+│       │   ├── Layout.jsx      # Header, nav, scrape button
+│       │   ├── StatCard.jsx    # Reusable stat card
+│       │   ├── ChartCard.jsx   # Chart.js wrapper
+│       │   └── ToastContainer.jsx
+│       └── pages/
+│           ├── Dashboard.jsx   # Overview & charts
+│           ├── Daily.jsx       # Daily analysis
+│           ├── Monthly.jsx     # Monthly analysis
+│           ├── DangerMap.jsx   # Leaflet map + heatmap
+│           ├── Zones.jsx       # Danger zone rankings
+│           └── Records.jsx     # Searchable records table
+├── static/dist/                # Production build (generated)
+├── data/                       # SQLite database (auto-created)
 │   └── accidents.db
-└── static/                 # Frontend assets
-    ├── index.html           # Dashboard markup
-    ├── css/
-    │   └── styles.css       # All styles
-    └── js/
-        ├── utils.js         # Shared state & helpers
-        ├── dashboard.js     # Dashboard tab logic
-        ├── daily.js         # Daily analysis tab
-        ├── monthly.js       # Monthly analysis tab
-        ├── map.js           # Leaflet map & heatmap
-        ├── zones.js         # Danger zones tab
-        ├── records.js       # Records table & search
-        └── app.js           # Tab switching & init
+├── .github/
+│   ├── workflows/ci.yml        # CI pipeline (lint + test)
+│   └── pull_request_template.md
+├── CONTRIBUTING.md             # Branch & PR rules
+└── .gitignore
 ```
 
 ---
@@ -86,23 +105,34 @@ source .venv/bin/activate        # macOS / Linux
 # .venv\Scripts\activate         # Windows
 ```
 
-### 3. Install Dependencies
+### 3. Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the Application
+### 4. Install & Build the React Frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+This builds the React app into `static/dist/`, which FastAPI serves automatically.
+
+### 5. Run the Application
 
 ```bash
 python run.py
 ```
 
-The server starts at **http://localhost:8000** — open it in your browser to see the dashboard.
+Open **http://localhost:8000** in your browser.
 
 > **Note:** The SQLite database (`data/accidents.db`) is created automatically on first run. No extra setup needed.
 
-### 5. Start Scraping Data
+### 6. Start Scraping Data
 
 You won't see any data on the dashboard until you run your first scrape:
 
@@ -117,9 +147,28 @@ The first scrape may take 1–2 minutes as it fetches and processes articles fro
 
 ---
 
+## Development Mode
+
+For frontend hot-reloading during development, run two terminals:
+
+**Terminal 1 — Backend:**
+```bash
+python run.py
+```
+
+**Terminal 2 — Frontend (hot reload):**
+```bash
+cd frontend
+npm run dev
+```
+
+Open **http://localhost:3000** — Vite proxies all `/api/*` requests to FastAPI on port 8000.
+
+---
+
 ## Using the Dashboard
 
-Once the server is running, open **http://localhost:8000** in any browser. The UI is a single-page dark-themed dashboard with six tabs across the top:
+Once the server is running, open **http://localhost:8000** in any browser. The UI is a React single-page app with a dark theme and six tabs across the top:
 
 ### Dashboard (Home)
 
