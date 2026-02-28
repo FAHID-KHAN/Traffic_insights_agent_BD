@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../utils/api';
 import ReportCard from '../components/ReportCard';
 import {
-  FaUsers, FaPlus, FaTimes, FaFilter, FaExclamationTriangle,
-  FaSpinner, FaUpload, FaImage, FaChevronDown,
+  FaUsers, FaPlus, FaTimes, FaExclamationTriangle,
+  FaSpinner, FaUpload, FaImage, FaChevronDown, FaCamera, FaFlag,
 } from 'react-icons/fa';
 
 /* ── Constants ─────────────────────────────────────────────── */
@@ -316,18 +316,32 @@ export default function CommunityFeed() {
 
   return (
     <div className="community-feed">
-      {/* ── Page header ── */}
-      <div className="feed-header">
-        <div className="feed-header-left">
-          <h2><FaUsers /> Community Incident Feed</h2>
-          <p className="feed-subtitle">
-            Real reports submitted by people across Bangladesh.
-            Help track road accidents not yet covered by news sources.
-          </p>
+      {/* ── Page heading ── */}
+      <h2 className="feed-page-title"><FaUsers style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} /> Community Feed</h2>
+
+      {/* ── Compose box ── */}
+      <div className="feed-compose">
+        <div className="feed-compose-row">
+          <span className="feed-compose-avatar">Y</span>
+          <button
+            className="feed-compose-btn"
+            onClick={() => { setSuccessId(null); setShowForm(true); }}
+          >
+            Share an incident near you…
+          </button>
         </div>
-        <button className="btn btn-primary feed-report-btn" onClick={() => { setSuccessId(null); setShowForm(true); }}>
-          <FaPlus /> Report an Incident
-        </button>
+        <div className="feed-compose-divider" />
+        <div className="feed-compose-actions">
+          <button className="feed-compose-action photo" onClick={() => { setSuccessId(null); setShowForm(true); }}>
+            <FaCamera /> Photo
+          </button>
+          <button className="feed-compose-action report" onClick={() => { setSuccessId(null); setShowForm(true); }}>
+            <FaFlag /> Report Incident
+          </button>
+          <button className="feed-compose-action" onClick={() => { setSuccessId(null); setShowForm(true); }}>
+            <FaPlus /> Report
+          </button>
+        </div>
       </div>
 
       {/* ── Success toast ── */}
@@ -338,24 +352,29 @@ export default function CommunityFeed() {
         </div>
       )}
 
-      {/* ── Stats bar ── */}
-      <div className="feed-stats-bar">
-        <span>{total} community report{total !== 1 ? 's' : ''}</span>
-        {hasFilters && <span className="feed-filter-active">Filters active</span>}
-      </div>
-
-      {/* ── Filters ── */}
-      <div className="feed-filters">
-        <FaFilter style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-        <select value={filterDistrict} onChange={(e) => setFilterDistrict(e.target.value)}>
-          <option value="">All Districts</option>
-          {districts.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select value={filterDivision} onChange={(e) => setFilterDivision(e.target.value)}>
+      {/* ── Filter bar ── */}
+      <div className="feed-filters-bar">
+        <select
+          className="feed-filter-select"
+          value={filterDivision}
+          onChange={(e) => setFilterDivision(e.target.value)}
+        >
           <option value="">All Divisions</option>
           {DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+        <select
+          className="feed-filter-select"
+          value={filterDistrict}
+          onChange={(e) => setFilterDistrict(e.target.value)}
+        >
+          <option value="">All Districts</option>
+          {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <select
+          className="feed-filter-select"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
           <option value="">All Types</option>
           {ACCIDENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -364,6 +383,7 @@ export default function CommunityFeed() {
             <FaTimes /> Clear
           </button>
         )}
+        <span className="feed-stats-label">{total} report{total !== 1 ? 's' : ''}</span>
       </div>
 
       {/* ── Feed ── */}
