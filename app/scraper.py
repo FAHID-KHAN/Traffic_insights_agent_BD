@@ -14,7 +14,16 @@ from app.config import (
     DAILY_STAR_BASE_URL, DAILY_STAR_ACCIDENT_URL,
     USER_AGENT, REQUEST_TIMEOUT, REQUEST_DELAY, MAX_PAGES_PER_SCRAPE,
 )
-from app.database import article_exists, insert_article, start_scrape_log, finish_scrape_log
+from app.database import (
+    article_exists,
+    insert_article,
+    start_scrape_log,
+    finish_scrape_log,
+    get_article_by_url,
+    get_articles_missing_published_date,
+    update_article_published_date,
+    sync_accident_dates_for_article,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +56,24 @@ class DailyStarScraper:
         if not date_str:
             return None
 
-        date_str = date_str.strip()
+        date_str = " ".join(date_str.strip().split())
+        # Source pages occasionally render invalid hybrid times ("18:03 PM").
+        # Drop AM/PM for 24h values so date parsing can still succeed.
+        date_str = re.sub(
+            r"\b(1[3-9]|2[0-3]):([0-5]\d)\s*(AM|PM)\b",
+            r"\1:\2",
+            date_str,
+            flags=re.IGNORECASE,
+        )
         formats = [
             "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%dT%H:%M:%S",
             "%Y-%m-%d",
+            "%d %B %Y, %I:%M %p",
+            "%d %b %Y, %I:%M %p",
+            "%d %B %Y, %H:%M",
+            "%d %b %Y, %H:%M",
             "%B %d, %Y",
             "%b %d, %Y",
             "%d %B %Y",
@@ -71,6 +93,63 @@ class DailyStarScraper:
                 return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
             except ValueError:
                 pass
+
+        # Explicit fallback for the most common rendered timestamp format.
+        textual_match = re.search(
+            r"(\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+\d{1,2}:\d{2}\s*(?:AM|PM))",
+            date_str,
+            re.IGNORECASE,
+        )
+        if textual_match:
+            candidate = textual_match.group(1)
+            for fmt in ("%d %B %Y, %I:%M %p", "%d %b %Y, %I:%M %p"):
+                try:
+                    return datetime.strptime(candidate, fmt).date()
+                except ValueError:
+                    continue
+        return None
+
+    def _extract_published_date(self, soup: BeautifulSoup) -> Optional[date]:
+        """Extract article published date from page markup."""
+        # Primary path: article header block used on the current site template.
+        primary = soup.select_one(
+            "div.mb-\\[14px\\].flex.items-start.gap-\\[16px\\] span.text-gray-600.font-medium"
+        )
+        if primary:
+            primary_text = primary.get_text(" ", strip=True)
+            # Same block can include "UPDATED ..."; keep the first token so
+            # analytics and accident_date stay tied to original publish time.
+            datetime_token = re.search(
+                r"(\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)",
+                primary_text,
+                re.IGNORECASE,
+            )
+            candidate = datetime_token.group(1) if datetime_token else primary_text
+            parsed = self._parse_date(candidate)
+            if parsed:
+                return parsed
+
+        # Metadata fallbacks handle legacy/alternate article templates.
+        date_selectors = [
+            "time[datetime]",
+            "meta[property='article:published_time']",
+            "meta[property='og:published_time']",
+            "meta[name='publishdate']",
+            "meta[itemprop='datePublished']",
+            "span.date",
+            "div.date",
+            "div.author-info time",
+            "div.published-at",
+        ]
+        for selector in date_selectors:
+            tag = soup.select_one(selector)
+            if not tag:
+                continue
+            date_str = tag.get("datetime") or tag.get("content") or tag.get_text(" ", strip=True)
+            parsed = self._parse_date(date_str)
+            if parsed:
+                return parsed
+
         return None
 
     # ── public methods ──────────────────────────────────────────
@@ -129,19 +208,9 @@ class DailyStarScraper:
         result["title"] = title_tag.get_text(strip=True) if title_tag else ""
 
         # Published date
-        date_tag = (
-            soup.select_one("time[datetime]")
-            or soup.select_one("meta[property='article:published_time']")
-            or soup.select_one("span.date")
-            or soup.select_one("div.date")
-            or soup.select_one("div.author-info time")
-            or soup.select_one("div.published-at")
-        )
-        pub_date = None
-        if date_tag:
-            date_str = date_tag.get("datetime") or date_tag.get("content") or date_tag.get_text(strip=True)
-            pub_date = self._parse_date(date_str)
-        result["published_date"] = pub_date or date.today()
+        pub_date = self._extract_published_date(soup)
+        # Keep unknown source publish dates as NULL to avoid false "today" analytics spikes.
+        result["published_date"] = pub_date
 
         # Article body
         body_selectors = [
@@ -189,6 +258,15 @@ class DailyStarScraper:
                 for article_info in article_links:
                     url = article_info["url"]
                     if article_exists(url):
+                        existing = get_article_by_url(url)
+                        # Existing URLs are skipped for insertion, but we still
+                        # repair missing published_date and re-sync accident dates.
+                        if existing and existing.get("published_date") is None:
+                            logger.info("Backfilling missing published_date for existing article %s", existing["id"])
+                            article_data = self.scrape_article(url)
+                            if article_data and article_data.get("published_date"):
+                                update_article_published_date(existing["id"], article_data["published_date"])
+                                sync_accident_dates_for_article(existing["id"], article_data["published_date"])
                         continue
 
                     time.sleep(REQUEST_DELAY)
@@ -222,7 +300,35 @@ class DailyStarScraper:
 
         return {"total_found": total_found, "total_new": total_new}
 
+    def backfill_missing_published_dates(self, limit: Optional[int] = None) -> Dict:
+        """Backfill published dates for existing articles and sync accident dates."""
+        missing_articles = get_articles_missing_published_date(limit=limit)
+        scanned = 0
+        updated = 0
+
+        for article in missing_articles:
+            scanned += 1
+            article_data = self.scrape_article(article["url"])
+            if article_data and article_data.get("published_date"):
+                # Ensure both tables use the same canonical publish day.
+                update_article_published_date(article["id"], article_data["published_date"])
+                sync_accident_dates_for_article(article["id"], article_data["published_date"])
+                updated += 1
+            time.sleep(REQUEST_DELAY)
+
+        return {
+            "missing_found": len(missing_articles),
+            "scanned": scanned,
+            "updated": updated,
+            "still_missing": len(missing_articles) - updated,
+        }
+
 
 def run_scraper():
     """Convenience function to run the scraper."""
     return DailyStarScraper().run_scrape()
+
+
+def run_published_date_backfill(limit: Optional[int] = None):
+    """Convenience function to backfill article published dates."""
+    return DailyStarScraper().backfill_missing_published_dates(limit=limit)

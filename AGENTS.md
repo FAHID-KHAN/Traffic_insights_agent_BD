@@ -22,6 +22,10 @@
   - `python run.py`
 - Trigger scrape manually:
   - `curl -X POST http://localhost:8000/api/scrape`
+- Start from fresh DB:
+  - `rm -f data/accidents.db`
+  - `rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log`
+  - `python run.py` then trigger scrape
 - Quick quality checks:
   - `flake8 app/`
   - `python3 -m compileall app run.py`
@@ -31,6 +35,8 @@
 - Keep modules focused (scraping, extraction, DB, routes separated).
 - Preserve API/DB contract used by UI (do not change response shapes or required columns without coordinated update).
 - Use explicit, structured logging for scraper and LLM paths.
+- Keep canonical date rule: `accidents.accident_date` must come from article `published_date` (not LLM content date).
+- Keep guardrails enabled: strict JSON schema, aggregate/historical filtering, and casualty sanity caps.
 
 ## Testing Guidelines
 - There is currently no dedicated `tests/` suite.

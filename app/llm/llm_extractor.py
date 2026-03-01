@@ -10,7 +10,7 @@ from typing import Optional, Any
 
 from pydantic import ValidationError
 
-from app.config import DATA_DIR
+from app.config import DATA_DIR, MAX_DEATHS_PER_EVENT, MAX_INJURIES_PER_EVENT
 from app.database import insert_accident
 from app.geo import DISTRICT_COORDINATES, district_to_division
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
@@ -82,6 +82,30 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
     "required": ["accidents"],
 }
 
+_AGGREGATE_PATTERNS = [
+    r"\bbetween\s+[a-z]+\s+\d{4}\s+and\s+[a-z]+\s+\d{4}\b",
+    r"\bbetween\s+\d{4}\s+and\s+\d{4}\b",
+    r"\bsince\s+\d{4}\b",
+    r"\bin\s+\d{4}\b",
+]
+
+_AGGREGATE_KEYWORDS = {
+    "this year",
+    "last year",
+    "throughout",
+    "according to report",
+    "according to the report",
+    "data shows",
+    "statistics",
+    "reported",
+    "brta",
+    "jatri kalyan samity",
+    "road safety foundation",
+    "during january",
+    "during february",
+    "during march",
+}
+
 
 class LLMAccidentExtractor:
     """Extracts one or more accidents from an article using OpenAI."""
@@ -130,6 +154,21 @@ class LLMAccidentExtractor:
         inserted_ids: list[int] = []
 
         for event in accidents:
+            # Skip historical/statistical summaries and keep only concrete event records.
+            if self._is_aggregate_or_historical_event(event):
+                logger.info("Article %s: skipped aggregate/historical event: %s", article_id, event.summary)
+                continue
+
+            # Guardrails against unrealistic casualty values from aggregate reports.
+            if self._is_casualty_outlier(event):
+                logger.info(
+                    "Article %s: skipped outlier event deaths=%s injuries=%s",
+                    article_id,
+                    event.deaths,
+                    event.injuries,
+                )
+                continue
+
             district = normalize_district(event.district)
             if district and district not in _ALLOWED_DISTRICTS:
                 district = None
@@ -137,7 +176,8 @@ class LLMAccidentExtractor:
                 district_to_division(district) if district else None
             )
             latitude, longitude = DISTRICT_COORDINATES.get(district, (None, None)) if district else (None, None)
-            accident_dt = self._resolve_accident_date(event.accident_date, published_date)
+            # Canonical accident date is the article publish date for consistent daily/monthly grouping.
+            accident_dt = published_date
             vehicles = ", ".join(event.vehicles_involved) if event.vehicles_involved else None
 
             accident_id = insert_accident(
@@ -185,9 +225,10 @@ class LLMAccidentExtractor:
             "- district must be one from allowed list or null.\n"
             "- Do not output locality names (e.g., Uttara, Mirpur, Tongi) as district.\n"
             "- Never generate latitude/longitude. Coordinates are handled by backend mapping.\n"
+            "- Return only concrete accident incidents, not annual/monthly aggregate statistics.\n"
             "- If multiple accidents are described, return multiple entries.\n"
             "- Do not invent counts; if unclear use 0.\n"
-            "- accident_date must be ISO date if explicitly present; otherwise null.\n"
+            "- Set accident_date to null. Backend will assign article published date as canonical event date.\n"
             "- vehicles_involved should be canonical tokens (bus, truck, car, motorcycle, train, boat, auto-rickshaw, rickshaw, microbus, pickup, ambulance).\n"
             "- summary should be concise and <= 200 characters.\n\n"
             "Article:\n"
@@ -207,13 +248,22 @@ class LLMAccidentExtractor:
         return parsed
 
     @staticmethod
-    def _resolve_accident_date(date_str: Optional[str], published_date: Optional[date]) -> Optional[date]:
-        if date_str:
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
-            except ValueError:
-                pass
-        return published_date
+    def _is_casualty_outlier(event: AccidentEvent) -> bool:
+        return event.deaths > MAX_DEATHS_PER_EVENT or event.injuries > MAX_INJURIES_PER_EVENT
+
+    @staticmethod
+    def _is_aggregate_or_historical_event(event: AccidentEvent) -> bool:
+        combined_text = " ".join(
+            part for part in [event.summary, event.location_raw, event.accident_type] if part
+        ).lower()
+
+        if not combined_text:
+            return False
+
+        if any(keyword in combined_text for keyword in _AGGREGATE_KEYWORDS):
+            return True
+
+        return any(re.search(pattern, combined_text) for pattern in _AGGREGATE_PATTERNS)
 
     def _log_failure(
         self,

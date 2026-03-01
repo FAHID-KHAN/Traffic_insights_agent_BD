@@ -71,6 +71,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
 OPENAI_RETRIES = int(os.getenv("OPENAI_RETRIES", "2"))
+MAX_DEATHS_PER_EVENT = int(os.getenv("MAX_DEATHS_PER_EVENT", "50"))
+MAX_INJURIES_PER_EVENT = int(os.getenv("MAX_INJURIES_PER_EVENT", "200"))
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)

@@ -3,4 +3,10 @@ __pycache__/
 *.pyo
 .venv/
 data/*.db
+data/llm_extraction_responses.log
 .env
+instructions.md
+instructions.md:Zone.Identifier
+AGENTS.md
+missing_published_dates.txt
+published_date_captured_links.txt
