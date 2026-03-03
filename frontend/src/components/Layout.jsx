@@ -77,18 +77,20 @@ export default function Layout() {
         </div>
       </header>
 
-      <nav className="nav-tabs">
-        {tabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) => `nav-tab${isActive ? ' active' : ''}`}
-          >
-            {tab.icon} {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <div className="nav-wrapper">
+        <nav className="nav-tabs">
+          {tabs.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              end={tab.end}
+              className={({ isActive }) => `nav-tab${isActive ? ' active' : ''}`}
+            >
+              {tab.icon} {tab.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
 
       <main className="main">
         <Outlet context={{ addToast, setLastUpdate }} />

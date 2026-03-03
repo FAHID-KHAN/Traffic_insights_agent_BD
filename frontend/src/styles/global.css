@@ -63,14 +63,15 @@
   border-bottom-color: var(--bd-green);
 }
 
-[data-theme="light"] .nav-tabs {
-  background: rgba(255, 255, 255, 0.6);
-  border-bottom-color: rgba(0, 106, 78, 0.15);
-  backdrop-filter: blur(8px);
+[data-theme="light"] .nav-wrapper {
+  background: rgba(255, 255, 255, 0.75);
+  border-bottom-color: rgba(0, 106, 78, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 [data-theme="light"] .nav-tab {
-  color: var(--text-secondary);
+  color: #4a6b60;
 }
 
 [data-theme="light"] .nav-tab:hover {
@@ -79,9 +80,11 @@
 }
 
 [data-theme="light"] .nav-tab.active {
-  color: white;
+  color: #fff;
   background: var(--bd-green);
-  box-shadow: 0 2px 8px rgba(0, 106, 78, 0.35);
+  box-shadow: 0 3px 10px rgba(0, 106, 78, 0.30), 0 1px 3px rgba(0, 106, 78, 0.20);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 [data-theme="light"] .stat-card {
@@ -261,6 +264,10 @@ h1, h2, h3, .stat-value, .chart-title { font-family: var(--font-display); }
 }
 
 /* ─── Navigation Tabs ─────────────────────────────────────────── */
+.nav-wrapper {
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--border-color);
+}
 .nav-tabs {
   max-width: 1400px;
   margin: 0 auto;
@@ -269,8 +276,6 @@ h1, h2, h3, .stat-value, .chart-title { font-family: var(--font-display); }
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  background: rgba(0,0,0,0.2);
-  border-bottom: 1px solid var(--border-color);
 }
 .nav-tabs::-webkit-scrollbar { display: none; }
 .nav-tab {
@@ -296,9 +301,10 @@ h1, h2, h3, .stat-value, .chart-title { font-family: var(--font-display); }
   background: rgba(255,255,255,0.05);
 }
 .nav-tab.active {
-  color: #0a1512;
-  background: var(--bd-green-bright);
+  color: #fff;
+  background: var(--bd-green);
   font-weight: 600;
+  box-shadow: 0 3px 10px rgba(0, 106, 78, 0.40);
 }
 
 /* ─── App Layout (sticky footer) ─────────────────────────────── */
