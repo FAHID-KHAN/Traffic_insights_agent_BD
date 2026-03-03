@@ -64,16 +64,24 @@
 }
 
 [data-theme="light"] .nav-tabs {
-  border-bottom-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom-color: rgba(0, 106, 78, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .nav-tab {
+  color: var(--text-secondary);
 }
 
 [data-theme="light"] .nav-tab:hover {
   color: var(--bd-green);
+  background: rgba(0, 106, 78, 0.08);
 }
 
 [data-theme="light"] .nav-tab.active {
   color: white;
   background: var(--bd-green);
+  box-shadow: 0 2px 8px rgba(0, 106, 78, 0.35);
 }
 
 [data-theme="light"] .stat-card {
