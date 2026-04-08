@@ -1,20 +1,38 @@
-# Traffic Insights Agent - Bangladesh 🇧🇩
+# Traffic Insights Agent - Bangladesh
 
-Real-time road accident analysis dashboard powered by web scraping from **The Daily Star Bangladesh** and **OpenAI-based structured extraction**.
+Road accident analysis dashboard powered by scraping **New Age Bangladesh** and extracting structured accident events with **OpenAI**.
 
----
+## Current Setup
+
+The system collects road-accident articles from the New Age road-accident tag pages, stores the raw article records in SQLite, then runs OpenAI-based structured extraction to populate normalized accident rows for the dashboard.
+
+Current source configuration:
+
+- Source: `New Age`
+- Base URL: `https://www.newagebd.net`
+- Tag URL: `https://www.newagebd.net/tags/Road%20accident`
+- Pagination per scrape: `page=1` through `page=16`
+
+Current runtime behavior:
+
+- Raw article data is stored in `articles`.
+- Structured accident events are stored in `accidents`.
+- Fresh scrapes now capture the article-specific New Age published date from the article header/byline region.
+- `accidents.accident_date` inherits the stored article `published_date`.
+- OpenAI extraction uses Chat Completions with a strict JSON schema.
+- The code default model is `gpt-4o-mini` unless overridden in `.env`.
+- Existing UI behavior and API shapes are preserved.
 
 ## Features
 
-- Automated scraping from Daily Star road-accident pages
-- LLM extraction with **OpenAI `gpt-4o-mini`**
-- Strict JSON extraction schema (validated with Pydantic)
-- Multi-event extraction (one article can create multiple accident rows)
-- Canonical event date policy: all accident rows use the article published date
-- District normalization and geo-mapped coordinates from backend constants
-- Dashboard, daily/monthly analytics, danger map, danger zones, searchable records
-
----
+- Automated scraping from New Age road-accident tag pages
+- Strict JSON extraction schema validated with Pydantic
+- Multi-event extraction from a single article
+- Correct article publish-date capture for fresh scrapes
+- Canonical accident date from article `published_date`
+- Backend-controlled district normalization and coordinate mapping
+- Daily, monthly, trend, map, and searchable dashboard views
+- Raw LLM response and failure logging for audit/debugging
 
 ## Tech Stack
 
@@ -28,8 +46,6 @@ Real-time road accident analysis dashboard powered by web scraping from **The Da
 | Charts/Map | Chart.js, Leaflet |
 | Scheduler | APScheduler |
 
----
-
 ## Project Structure
 
 ```text
@@ -42,9 +58,9 @@ Traffic_insights_agent_BD/
 │   ├── database.py
 │   ├── scraper.py
 │   ├── routes.py
-│   ├── extractor.py              # compatibility wrapper -> LLM extractor
-│   ├── geo.py                    # district -> coordinates + division mapping
-│   ├── normalize.py              # district/locality normalization
+│   ├── extractor.py
+│   ├── geo.py
+│   ├── normalize.py
 │   └── llm/
 │       ├── openai_client.py
 │       ├── llm_schema.py
@@ -55,8 +71,6 @@ Traffic_insights_agent_BD/
 │   └── llm_extraction_failures.log
 └── static/
 ```
-
----
 
 ## Quick Start
 
@@ -70,23 +84,24 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) Configure OpenAI key
+### 2) Configure OpenAI
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENAI_API_KEY
 ```
 
-Required `.env` keys:
+Required environment values:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_TIMEOUT_SECONDS=60
 OPENAI_RETRIES=2
+MAX_DEATHS_PER_EVENT=50
+MAX_INJURIES_PER_EVENT=200
 ```
 
-### 3) Run server
+### 3) Run the server
 
 ```bash
 python run.py
@@ -100,27 +115,31 @@ Open `http://localhost:8000`
 curl -X POST http://localhost:8000/api/scrape
 ```
 
-If result says `found N, 0 new`, extraction was skipped for existing URLs.
-To force extraction on existing articles:
+If the result says `found N, 0 new`, the scraper found URLs already present in `articles`, so new extraction was skipped for those URLs.
+
+### 5) Reprocess all existing articles
+
+Use this only if you intentionally want to re-run extraction on existing article content.
 
 ```bash
 python3 -c "from app.extractor import reprocess_all_articles; print(reprocess_all_articles())"
 ```
 
-### 5) Backfill missing published dates (optional, for older rows)
+Note: reprocessing does not deduplicate existing accident rows.
 
-Use this if some existing `articles.published_date` values are `NULL` and you want to repair them.
+### 6) Backfill missing published dates
+
+Use this when existing `articles.published_date` values are `NULL`.
 
 ```bash
 curl -X POST "http://localhost:8000/api/backfill-published-dates?limit=5000"
 ```
 
-This also syncs `accidents.accident_date` to the repaired `articles.published_date`.
+This also syncs `accidents.accident_date` to the repaired article published date.
 
-### 6) Start completely fresh (new DB)
+### 7) Start from a fresh database
 
 ```bash
-# stop running server first
 rm -f data/accidents.db
 rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log
 python run.py
@@ -132,40 +151,39 @@ Then trigger:
 curl -X POST http://localhost:8000/api/scrape
 ```
 
-Optional verification:
+## End-to-End Workflow
 
-```bash
-sqlite3 data/accidents.db "SELECT COUNT(*) total, SUM(CASE WHEN published_date IS NOT NULL THEN 1 ELSE 0 END) with_date, SUM(CASE WHEN published_date IS NULL THEN 1 ELSE 0 END) missing FROM articles;"
-sqlite3 data/accidents.db "SELECT a.id, a.article_id, ar.published_date, a.accident_date FROM accidents a JOIN articles ar ON ar.id=a.article_id ORDER BY a.id DESC LIMIT 20;"
-```
+1. Scraper fetches New Age road-accident listing pages.
+2. Article links are collected from each page.
+3. Each article page is scraped for title, content, and the article's published date from the article header.
+4. The article is inserted into `articles`.
+5. OpenAI returns strict JSON shaped as `{"accidents": [...]}`.
+6. Backend validation, normalization, and filtering are applied.
+7. One or more rows are inserted into `accidents`.
+8. API endpoints serve the dashboard and records views.
 
----
+## Guardrails and Business Rules
 
-## Strict Extraction Behavior
+- LLM output must match a strict JSON schema.
+- District must be one of the backend-supported districts or `null`.
+- Locality names are normalized in backend code to parent districts where applicable.
+- Coordinates are never generated by the LLM.
+- Latitude and longitude come only from backend mappings in `app/geo.py`.
+- Aggregate or historical report-style items are filtered before DB insert.
+- Casualty sanity caps are enforced before insert.
+- `published_date` is taken from the article-specific New Age publish timestamp, not a generic page date.
+- `accident_date` is assigned from `articles.published_date`.
+- One article can generate multiple accident rows.
 
-- Model response is requested in strict JSON schema mode.
-- Payload must match:
-  - `{"accidents": [ ... ]}`
-- District must be one of backend allowed districts (derived from `app/geo.py`) or `null`.
-- Locality names (e.g., `Uttara`, `Mirpur`, `Tongi`) are normalized to parent district in backend.
-- Coordinates are **never generated by the model**; backend maps district -> `(lat, lon)` via `app/geo.py`.
-- Historical/aggregate report rows are filtered out before DB insert.
-- Casualty sanity caps are applied before DB insert.
-- `accident_date` is assigned from article `published_date` (LLM-inferred date is ignored).
+## Current Limitations
 
----
-
-## End-to-End Flow
-
-1. Scraper collects article URLs from Daily Star accident pages.
-2. For each article, scraper extracts title, content, and published date.
-3. Article is stored in `articles`.
-4. OpenAI extractor returns strict JSON accidents.
-5. Backend applies normalization and guardrails.
-6. Accidents are stored with canonical date from `articles.published_date`.
-7. APIs (`/api/overview`, `/api/daily`, `/api/monthly`, `/api/map-data`) power the UI.
-
----
+- Aggregate and historical filtering is heuristic and may still allow false positives or reject borderline valid stories.
+- Accident-level deduplication is not implemented; only article URLs are unique.
+- Reprocessing existing articles can create duplicate rows in `accidents`.
+- Published date parsing depends on New Age article markup remaining consistent.
+- The canonical publish-date rule may differ from the actual event date mentioned in the article.
+- Scraper reliability depends on the current HTML structure of New Age pages.
+- There is no dedicated automated test suite yet.
 
 ## Logging
 
@@ -174,7 +192,22 @@ tail -f data/llm_extraction_responses.log
 tail -f data/llm_extraction_failures.log
 ```
 
----
+## Operational Checks
+
+Useful SQLite checks:
+
+```bash
+sqlite3 data/accidents.db "SELECT COUNT(*) total, SUM(CASE WHEN published_date IS NOT NULL THEN 1 ELSE 0 END) with_date, SUM(CASE WHEN published_date IS NULL THEN 1 ELSE 0 END) missing FROM articles;"
+sqlite3 data/accidents.db "SELECT a.id, a.article_id, ar.published_date, a.accident_date FROM accidents a JOIN articles ar ON ar.id = a.article_id ORDER BY a.id DESC LIMIT 20;"
+sqlite3 data/accidents.db "SELECT MIN(published_date), MAX(published_date), COUNT(DISTINCT published_date) FROM articles;"
+```
+
+Quick quality checks:
+
+```bash
+flake8 app/
+python3 -m compileall app run.py
+```
 
 ## API Endpoints
 
@@ -185,9 +218,11 @@ tail -f data/llm_extraction_failures.log
 - `GET /api/map-data`
 - `GET /api/recent?limit=50`
 - `GET /api/search?q=Dhaka`
+- `GET /api/trend?days=30`
+- `GET /api/yearly`
+- `GET /api/scrape-logs?limit=20`
 - `POST /api/scrape`
-
----
+- `POST /api/backfill-published-dates?limit=5000`
 
 ## License
 

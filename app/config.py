@@ -13,12 +13,13 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 DB_PATH = os.path.join(DATA_DIR, "accidents.db")
 
 # ─── Scraper Settings ──────────────────────────────────────────
-DAILY_STAR_BASE_URL = "https://www.thedailystar.net"
-DAILY_STAR_ACCIDENT_URL = "https://www.thedailystar.net/tags/road-accident"
+NEWS_SOURCE_NAME = "New Age"
+NEWS_SOURCE_BASE_URL = "https://www.newagebd.net"
+NEWS_SOURCE_ACCIDENT_URL = "https://www.newagebd.net/tags/Road%20accident"
 SCRAPE_INTERVAL_HOURS = 6
 REQUEST_TIMEOUT = 30
 REQUEST_DELAY = 2
-MAX_PAGES_PER_SCRAPE = 5
+MAX_PAGES_PER_SCRAPE = 16
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, date
 from typing import Optional
 
-from app.config import DB_PATH
+from app.config import DB_PATH, NEWS_SOURCE_NAME
 
 
 def get_connection() -> sqlite3.Connection:
@@ -31,7 +31,7 @@ def init_db():
             content TEXT,
             published_date DATE,
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            source TEXT DEFAULT 'The Daily Star'
+            source TEXT DEFAULT 'New Age'
         );
 
         CREATE TABLE IF NOT EXISTS accidents (
@@ -83,13 +83,14 @@ def article_exists(url: str) -> bool:
 
 
 def insert_article(url: str, title: str, content: str,
-                   published_date: Optional[date] = None) -> int:
+                   published_date: Optional[date] = None,
+                   source: str = NEWS_SOURCE_NAME) -> int:
     """Insert a new article and return its ID."""
     conn = get_connection()
     cursor = conn.execute(
-        """INSERT INTO articles (url, title, content, published_date)
-           VALUES (?, ?, ?, ?)""",
-        (url, title, content, published_date)
+        """INSERT INTO articles (url, title, content, published_date, source)
+           VALUES (?, ?, ?, ?, ?)""",
+        (url, title, content, published_date, source)
     )
     article_id = cursor.lastrowid
     conn.commit()

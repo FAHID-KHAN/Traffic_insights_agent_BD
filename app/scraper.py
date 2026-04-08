@@ -1,35 +1,42 @@
 """
-Web scraper for The Daily Star Bangladesh — Accident / Road Crash news.
-Extracts article links, titles, and full content from the accident tag page.
+Web scraper for New Age Bangladesh road-accident news.
+Extracts article links, titles, and full content from the accident tag pages.
 """
+import logging
 import re
 import time
-import logging
+from datetime import date, datetime
+from typing import Dict, List, Optional
+from urllib.parse import urljoin
+
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, date
-from typing import List, Dict, Optional
 
 from app.config import (
-    DAILY_STAR_BASE_URL, DAILY_STAR_ACCIDENT_URL,
-    USER_AGENT, REQUEST_TIMEOUT, REQUEST_DELAY, MAX_PAGES_PER_SCRAPE,
+    NEWS_SOURCE_ACCIDENT_URL,
+    NEWS_SOURCE_BASE_URL,
+    NEWS_SOURCE_NAME,
+    MAX_PAGES_PER_SCRAPE,
+    REQUEST_DELAY,
+    REQUEST_TIMEOUT,
+    USER_AGENT,
 )
 from app.database import (
     article_exists,
-    insert_article,
-    start_scrape_log,
     finish_scrape_log,
     get_article_by_url,
     get_articles_missing_published_date,
-    update_article_published_date,
+    insert_article,
+    start_scrape_log,
     sync_accident_dates_for_article,
+    update_article_published_date,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class DailyStarScraper:
-    """Scraper for The Daily Star Bangladesh accident news."""
+class NewAgeScraper:
+    """Scraper for New Age Bangladesh accident news."""
 
     def __init__(self):
         self.session = requests.Session()
@@ -39,203 +46,276 @@ class DailyStarScraper:
             "Accept-Language": "en-US,en;q=0.5",
         })
 
-    # ── internal helpers ────────────────────────────────────────
-
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        """Fetch a page and return parsed BeautifulSoup object."""
+        """Fetch a page and return a parsed BeautifulSoup object."""
         try:
             response = self.session.get(url, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             return BeautifulSoup(response.text, "html.parser")
-        except requests.RequestException as e:
-            logger.error(f"Failed to fetch {url}: {e}")
+        except requests.RequestException as exc:
+            logger.error("Failed to fetch %s: %s", url, exc)
             return None
 
     def _parse_date(self, date_str: str) -> Optional[date]:
-        """Try to parse various date formats from The Daily Star."""
+        """Parse common New Age date representations into a date."""
         if not date_str:
             return None
 
-        date_str = " ".join(date_str.strip().split())
-        # Source pages occasionally render invalid hybrid times ("18:03 PM").
-        # Drop AM/PM for 24h values so date parsing can still succeed.
-        date_str = re.sub(
-            r"\b(1[3-9]|2[0-3]):([0-5]\d)\s*(AM|PM)\b",
-            r"\1:\2",
-            date_str,
-            flags=re.IGNORECASE,
-        )
+        candidate = " ".join(date_str.strip().split())
+        candidate = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", candidate, flags=re.IGNORECASE)
+        candidate = candidate.replace("Published:", "").replace("Updated:", "").strip(" |,-")
+        candidate = re.sub(r"\b([A-Za-z]+)\.?(\d{1,2},\s+\d{4})", r"\1 \2", candidate)
+
         formats = [
             "%Y-%m-%dT%H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%dT%H:%M:%S",
             "%Y-%m-%d",
-            "%d %B %Y, %I:%M %p",
-            "%d %b %Y, %I:%M %p",
-            "%d %B %Y, %H:%M",
-            "%d %b %Y, %H:%M",
             "%B %d, %Y",
             "%b %d, %Y",
             "%d %B %Y",
             "%d %b %Y",
+            "%d %B, %Y",
+            "%d %b, %Y",
             "%d/%m/%Y",
             "%m/%d/%Y",
+            "%I:%M %p, %B %d, %Y",
+            "%I:%M %p %B %d, %Y",
+            "%H:%M, %B %d, %Y",
+            "%H:%M %B %d, %Y",
+            "%d %B %Y, %H:%M",
+            "%d %b %Y, %H:%M",
+            "%d %B, %Y, %H:%M",
+            "%d %b, %Y, %H:%M",
         ]
         for fmt in formats:
             try:
-                return datetime.strptime(date_str, fmt).date()
-            except (ValueError, IndexError):
+                return datetime.strptime(candidate, fmt).date()
+            except ValueError:
                 continue
 
-        match = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
-        if match:
-            try:
-                return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
-            except ValueError:
-                pass
+        iso_match = re.search(r"(\d{4}-\d{2}-\d{2})", candidate)
+        if iso_match:
+            return datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
 
-        # Explicit fallback for the most common rendered timestamp format.
         textual_match = re.search(
-            r"(\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+\d{1,2}:\d{2}\s*(?:AM|PM))",
-            date_str,
-            re.IGNORECASE,
+            r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+            candidate,
         )
         if textual_match:
-            candidate = textual_match.group(1)
-            for fmt in ("%d %B %Y, %I:%M %p", "%d %b %Y, %I:%M %p"):
+            for fmt in ("%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"):
                 try:
-                    return datetime.strptime(candidate, fmt).date()
+                    return datetime.strptime(textual_match.group(1), fmt).date()
                 except ValueError:
                     continue
+
+        return None
+
+    def _extract_date_from_text(self, text: str, anchor: Optional[str] = None) -> Optional[date]:
+        """Extract a date from a focused text block near the article header."""
+        if not text:
+            return None
+
+        candidate = " ".join(text.split())
+        if anchor:
+            anchor_text = " ".join(anchor.split())
+            anchor_index = candidate.find(anchor_text)
+            if anchor_index != -1:
+                candidate = candidate[anchor_index + len(anchor_text):]
+
+        # Keep the search window narrow so we do not accidentally parse
+        # page-header or "Read More" dates from elsewhere in the document.
+        candidate = candidate[:800]
+
+        patterns = [
+            r"\b(\d{1,2}\s+[A-Za-z]+,\s+\d{4},\s+\d{1,2}:\d{2})\b",
+            r"\b([A-Za-z]+\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2})\b",
+            r"(Published|Updated)\s*:?\s*([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+            r"\b(\d{1,2}\s+[A-Za-z]+,\s+\d{4})\b",
+            r"\b([A-Za-z]+\s+\d{1,2},\s+\d{4})\b",
+            r"\b(\d{1,2}\s+[A-Za-z]+\s+\d{4})\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, candidate, re.IGNORECASE)
+            if not match:
+                continue
+            captured = match.group(match.lastindex or 1)
+            parsed = self._parse_date(captured)
+            if parsed:
+                return parsed
+
+        return None
+
+    def _extract_header_date(self, soup: BeautifulSoup) -> Optional[date]:
+        """Extract the article publish date from the title/byline region."""
+        title_tag = soup.select_one("h1")
+        title_text = title_tag.get_text(" ", strip=True) if title_tag else None
+
+        candidate_blocks: List[str] = []
+        if title_tag:
+            current = title_tag
+            for _ in range(4):
+                current = current.parent
+                if current is None:
+                    break
+                text = current.get_text(" ", strip=True)
+                if text and text not in candidate_blocks:
+                    candidate_blocks.append(text)
+
+            for sibling in title_tag.find_next_siblings(limit=5):
+                text = sibling.get_text(" ", strip=True)
+                if text and text not in candidate_blocks:
+                    candidate_blocks.append(text)
+
+        for selector in (
+            "article",
+            "main",
+            "div.news-detail",
+            "div.news-content",
+            "div.detail-content",
+            "div.post-content",
+        ):
+            tag = soup.select_one(selector)
+            if not tag:
+                continue
+            text = tag.get_text(" ", strip=True)
+            if text and text not in candidate_blocks:
+                candidate_blocks.append(text)
+
+        for block in candidate_blocks:
+            parsed = self._extract_date_from_text(block, anchor=title_text)
+            if parsed:
+                return parsed
+
         return None
 
     def _extract_published_date(self, soup: BeautifulSoup) -> Optional[date]:
         """Extract article published date from page markup."""
-        # Primary path: article header block used on the current site template.
-        primary = soup.select_one(
-            "div.mb-\\[14px\\].flex.items-start.gap-\\[16px\\] span.text-gray-600.font-medium"
-        )
-        if primary:
-            primary_text = primary.get_text(" ", strip=True)
-            # Same block can include "UPDATED ..."; keep the first token so
-            # analytics and accident_date stay tied to original publish time.
-            datetime_token = re.search(
-                r"(\d{1,2}\s+[A-Za-z]+\s+\d{4},\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)",
-                primary_text,
-                re.IGNORECASE,
-            )
-            candidate = datetime_token.group(1) if datetime_token else primary_text
-            parsed = self._parse_date(candidate)
-            if parsed:
-                return parsed
-
-        # Metadata fallbacks handle legacy/alternate article templates.
-        date_selectors = [
-            "time[datetime]",
+        meta_selectors = [
             "meta[property='article:published_time']",
             "meta[property='og:published_time']",
-            "meta[name='publishdate']",
+            "meta[name='publish_date']",
+            "meta[name='pubdate']",
             "meta[itemprop='datePublished']",
-            "span.date",
-            "div.date",
-            "div.author-info time",
-            "div.published-at",
         ]
-        for selector in date_selectors:
+        for selector in meta_selectors:
             tag = soup.select_one(selector)
             if not tag:
                 continue
-            date_str = tag.get("datetime") or tag.get("content") or tag.get_text(" ", strip=True)
+            date_str = tag.get("content") or tag.get("datetime") or tag.get_text(" ", strip=True)
             parsed = self._parse_date(date_str)
+            if parsed:
+                return parsed
+
+        header_date = self._extract_header_date(soup)
+        if header_date:
+            return header_date
+
+        text_selectors = [
+            "div.news-time",
+            "div.post-date",
+            "div.publish-time",
+            "div.article-time",
+            "span.news-date",
+            "span.publish-date",
+            "span.date",
+            "p.date",
+        ]
+        for selector in text_selectors:
+            tag = soup.select_one(selector)
+            if not tag:
+                continue
+            parsed = self._extract_date_from_text(tag.get_text(" ", strip=True))
+            if parsed:
+                return parsed
+
+        article_block = soup.select_one("article") or soup.select_one("main")
+        if article_block:
+            parsed = self._extract_date_from_text(article_block.get_text(" ", strip=True))
             if parsed:
                 return parsed
 
         return None
 
-    # ── public methods ──────────────────────────────────────────
-
-    def get_article_links(self, page: int = 0) -> List[Dict]:
-        """Get article links from the accident tag listing page."""
-        url = DAILY_STAR_ACCIDENT_URL
-        if page > 0:
-            url = f"{url}?page={page}"
-
-        logger.info(f"Fetching article list from: {url}")
+    def get_article_links(self, page: int = 1) -> List[Dict]:
+        """Get article links from a New Age accident tag page."""
+        url = f"{NEWS_SOURCE_ACCIDENT_URL}?page={page}"
+        logger.info("Fetching article list from: %s", url)
         soup = self._fetch_page(url)
         if not soup:
             return []
 
-        articles = []
-        selectors = [
-            "div.card a", "h3 a", "h2 a",
-            "div.list-content a", "article a", "div.media-body a",
-            "div.row div a[href*='/news/']",
-            "a[href*='/news/bangladesh/']",
-            "a[href*='/road-accident']",
-        ]
+        articles: List[Dict] = []
+        seen_urls: set[str] = set()
+        for link in soup.select("a[href]"):
+            href = (link.get("href") or "").strip()
+            title = link.get_text(" ", strip=True)
+            if not href or len(title) < 15:
+                continue
+            absolute_url = urljoin(NEWS_SOURCE_BASE_URL, href)
+            if not any(
+                token in absolute_url
+                for token in ("/post/", "/article/", "/print/article/")
+            ):
+                continue
+            if absolute_url in seen_urls:
+                continue
+            seen_urls.add(absolute_url)
+            articles.append({"url": absolute_url, "title": title})
 
-        seen_urls: set = set()
-        for selector in selectors:
-            for link in soup.select(selector):
-                href = link.get("href", "")
-                title = link.get_text(strip=True)
-                if not href or not title or len(title) < 15:
-                    continue
-                if href.startswith("/"):
-                    href = DAILY_STAR_BASE_URL + href
-                elif not href.startswith("http"):
-                    continue
-                if "/news/" not in href and "/city/" not in href:
-                    continue
-                if href not in seen_urls:
-                    seen_urls.add(href)
-                    articles.append({"url": href, "title": title})
-
-        logger.info(f"Found {len(articles)} article links on page {page}")
+        logger.info("Found %s article links on page %s", len(articles), page)
         return articles
 
     def scrape_article(self, url: str) -> Optional[Dict]:
         """Scrape a single article page for its full content and metadata."""
-        logger.info(f"Scraping article: {url}")
+        logger.info("Scraping article: %s", url)
         soup = self._fetch_page(url)
         if not soup:
             return None
 
         result: Dict = {"url": url}
 
-        # Title
-        title_tag = soup.select_one("h1") or soup.select_one("h1.title")
-        result["title"] = title_tag.get_text(strip=True) if title_tag else ""
+        title_tag = (
+            soup.select_one("h1")
+            or soup.select_one("meta[property='og:title']")
+            or soup.select_one("title")
+        )
+        if title_tag and title_tag.name == "meta":
+            result["title"] = (title_tag.get("content") or "").strip()
+        else:
+            result["title"] = title_tag.get_text(" ", strip=True) if title_tag else ""
 
-        # Published date
-        pub_date = self._extract_published_date(soup)
-        # Keep unknown source publish dates as NULL to avoid false "today" analytics spikes.
-        result["published_date"] = pub_date
+        result["published_date"] = self._extract_published_date(soup)
 
-        # Article body
-        body_selectors = [
-            "div.field-body", "div.article-body", "div.node-body",
-            "div.field--name-body", "article div.field-items",
-            "div.content-details", "div.article-content",
-        ]
         content_parts: List[str] = []
+        body_selectors = [
+            "div.news-article-text",
+            "div.news-content",
+            "div.article-body",
+            "div.detail-content",
+            "div.post-content",
+            "article",
+        ]
         for selector in body_selectors:
             body = soup.select_one(selector)
-            if body:
-                paragraphs = body.find_all("p")
-                content_parts = (
-                    [p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)]
-                    if paragraphs
-                    else [body.get_text(strip=True)]
-                )
+            if not body:
+                continue
+            paragraphs = [
+                p.get_text(" ", strip=True)
+                for p in body.find_all("p")
+                if p.get_text(" ", strip=True)
+            ]
+            if paragraphs:
+                content_parts = paragraphs
                 break
 
         if not content_parts:
-            content_parts = [
-                p.get_text(strip=True)
+            paragraphs = [
+                p.get_text(" ", strip=True)
                 for p in soup.find_all("p")
-                if p.get_text(strip=True) and len(p.get_text(strip=True)) > 40
+                if p.get_text(" ", strip=True) and len(p.get_text(" ", strip=True)) > 40
             ]
+            content_parts = paragraphs
 
         result["content"] = "\n\n".join(content_parts)
         return result
@@ -247,22 +327,23 @@ class DailyStarScraper:
         total_new = 0
 
         try:
-            for page in range(MAX_PAGES_PER_SCRAPE):
+            for page in range(1, MAX_PAGES_PER_SCRAPE + 1):
                 article_links = self.get_article_links(page=page)
                 total_found += len(article_links)
 
                 if not article_links:
-                    logger.info(f"No articles on page {page}, stopping pagination")
+                    logger.info("No articles on page %s, stopping pagination", page)
                     break
 
                 for article_info in article_links:
                     url = article_info["url"]
                     if article_exists(url):
                         existing = get_article_by_url(url)
-                        # Existing URLs are skipped for insertion, but we still
-                        # repair missing published_date and re-sync accident dates.
                         if existing and existing.get("published_date") is None:
-                            logger.info("Backfilling missing published_date for existing article %s", existing["id"])
+                            logger.info(
+                                "Backfilling missing published_date for existing article %s",
+                                existing["id"],
+                            )
                             article_data = self.scrape_article(url)
                             if article_data and article_data.get("published_date"):
                                 update_article_published_date(existing["id"], article_data["published_date"])
@@ -277,9 +358,10 @@ class DailyStarScraper:
                             title=article_data.get("title", article_info["title"]),
                             content=article_data["content"],
                             published_date=article_data.get("published_date"),
+                            source=NEWS_SOURCE_NAME,
                         )
                         total_new += 1
-                        logger.info(f"Saved article #{article_id}: {article_data.get('title', '')[:60]}")
+                        logger.info("Saved article #%s: %s", article_id, article_data.get("title", "")[:60])
 
                         from app.llm.llm_extractor import LLMAccidentExtractor
                         LLMAccidentExtractor().process_article(
@@ -291,11 +373,10 @@ class DailyStarScraper:
                 time.sleep(REQUEST_DELAY)
 
             finish_scrape_log(log_id, total_found, total_new, "completed")
-            logger.info(f"Scrape complete: {total_found} found, {total_new} new")
-
-        except Exception as e:
-            logger.error(f"Scrape failed: {e}")
-            finish_scrape_log(log_id, total_found, total_new, f"error: {str(e)}")
+            logger.info("Scrape complete: %s found, %s new", total_found, total_new)
+        except Exception as exc:
+            logger.error("Scrape failed: %s", exc)
+            finish_scrape_log(log_id, total_found, total_new, f"error: {str(exc)}")
             raise
 
         return {"total_found": total_found, "total_new": total_new}
@@ -310,7 +391,6 @@ class DailyStarScraper:
             scanned += 1
             article_data = self.scrape_article(article["url"])
             if article_data and article_data.get("published_date"):
-                # Ensure both tables use the same canonical publish day.
                 update_article_published_date(article["id"], article_data["published_date"])
                 sync_accident_dates_for_article(article["id"], article_data["published_date"])
                 updated += 1
@@ -326,9 +406,9 @@ class DailyStarScraper:
 
 def run_scraper():
     """Convenience function to run the scraper."""
-    return DailyStarScraper().run_scrape()
+    return NewAgeScraper().run_scrape()
 
 
 def run_published_date_backfill(limit: Optional[int] = None):
     """Convenience function to backfill article published dates."""
-    return DailyStarScraper().backfill_missing_published_dates(limit=limit)
+    return NewAgeScraper().backfill_missing_published_dates(limit=limit)

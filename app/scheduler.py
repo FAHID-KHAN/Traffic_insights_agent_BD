@@ -26,8 +26,8 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(
         _scheduled_scrape,
         trigger=IntervalTrigger(hours=SCRAPE_INTERVAL_HOURS),
-        id="scrape_daily_star",
-        name="Scrape The Daily Star for accident news",
+        id="scrape_new_age",
+        name="Scrape New Age for accident news",
         replace_existing=True,
         max_instances=1,
     )

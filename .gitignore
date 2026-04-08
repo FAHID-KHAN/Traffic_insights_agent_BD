@@ -2,11 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
-data/*.db
-data/llm_extraction_responses.log
 .env
-instructions.md
 instructions.md:Zone.Identifier
-AGENTS.md
 missing_published_dates.txt
 published_date_captured_links.txt
+# Local Codex skills
+skills/
+.codex
+AGENTS.md
