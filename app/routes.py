@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
 from app import database as db
-from app.scraper import run_scraper
+from app.scraper import run_scraper, run_published_date_backfill
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,18 @@ async def trigger_scrape():
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Scrape failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/backfill-published-dates")
+async def backfill_published_dates(limit: int = Query(0, ge=0, le=5000)):
+    try:
+        # Repair endpoint for legacy rows scraped before published_date capture
+        # was stable. Safe to run multiple times; only NULL dates are targeted.
+        result = run_published_date_backfill(limit=limit or None)
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Published date backfill failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -2,4 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
-data/*.db
+.env
+instructions.md:Zone.Identifier
+missing_published_dates.txt
+published_date_captured_links.txt
+# Local Codex skills
+skills/
+.codex
+AGENTS.md
+data/

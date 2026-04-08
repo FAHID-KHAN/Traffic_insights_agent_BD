@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
     """Build and return the configured FastAPI instance."""
     application = FastAPI(
         title="Traffic Insights Agent - Bangladesh",
-        description="Real-time accident data analysis from The Daily Star Bangladesh",
+        description="Real-time accident data analysis from New Age Bangladesh",
         version="1.0.0",
         lifespan=lifespan,
     )

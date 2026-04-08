@@ -1,223 +1,229 @@
-# Traffic Insights Agent - Bangladesh 🇧🇩
+# Traffic Insights Agent - Bangladesh
 
-**Real-time road accident analysis dashboard** powered by automated web scraping from **The Daily Star Bangladesh**.
+Road accident analysis dashboard powered by scraping **New Age Bangladesh** and extracting structured accident events with **OpenAI**.
 
-This application scrapes, processes, and visualizes road accident data to identify danger zones, track casualties, and provide daily/monthly analysis — helping raise awareness about road safety in Bangladesh.
+## Current Setup
 
----
+The system collects road-accident articles from the New Age road-accident tag pages, stores the raw article records in SQLite, then runs OpenAI-based structured extraction to populate normalized accident rows for the dashboard.
+
+Current source configuration:
+
+- Source: `New Age`
+- Base URL: `https://www.newagebd.net`
+- Tag URL: `https://www.newagebd.net/tags/Road%20accident`
+- Pagination per scrape: `page=1` through `page=16`
+
+Current runtime behavior:
+
+- Raw article data is stored in `articles`.
+- Structured accident events are stored in `accidents`.
+- Fresh scrapes now capture the article-specific New Age published date from the article header/byline region.
+- `accidents.accident_date` inherits the stored article `published_date`.
+- OpenAI extraction uses Chat Completions with a strict JSON schema.
+- The code default model is `gpt-4o-mini` unless overridden in `.env`.
+- Existing UI behavior and API shapes are preserved.
 
 ## Features
 
-- **Automated Web Scraping** — Scrapes accident news from The Daily Star's road-accident tag page every 6 hours
-- **NLP Data Extraction** — Automatically extracts accident type, location (district/division), death & injury counts, vehicles involved
-- **Interactive Dashboard** — Real-time overview with charts showing trends, accident types, and danger districts
-- **Daily Analysis** — Date-specific breakdown of accidents, deaths, injuries by type and location
-- **Monthly Analysis** — Monthly aggregates with daily breakdown charts, top danger zones
-- **Danger Zone Map** — Interactive Leaflet map with marker clusters and heatmap visualization
-- **Danger Zone Rankings** — Top accident-prone districts ranked by frequency and severity
-- **Searchable Records** — Full accident database with search and filter capabilities
-- **Manual Scrape Trigger** — One-click button to trigger immediate scraping
-
----
+- Automated scraping from New Age road-accident tag pages
+- Strict JSON extraction schema validated with Pydantic
+- Multi-event extraction from a single article
+- Correct article publish-date capture for fresh scrapes
+- Canonical accident date from article `published_date`
+- Backend-controlled district normalization and coordinate mapping
+- Daily, monthly, trend, map, and searchable dashboard views
+- Raw LLM response and failure logging for audit/debugging
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| **Backend** | Python, FastAPI |
-| **Scraper** | BeautifulSoup4, Requests |
-| **NLP/Extraction** | Regex-based entity extraction |
-| **Database** | SQLite |
-| **Frontend** | HTML5, CSS3, Vanilla JavaScript |
-| **Charts** | Chart.js |
-| **Maps** | Leaflet.js + MarkerCluster + Heatmap |
-| **Scheduler** | APScheduler |
-
----
+| Backend | Python, FastAPI |
+| Scraper | Requests, BeautifulSoup4 |
+| LLM Extraction | OpenAI Chat Completions + Pydantic |
+| Database | SQLite |
+| Frontend | HTML/CSS/Vanilla JS |
+| Charts/Map | Chart.js, Leaflet |
+| Scheduler | APScheduler |
 
 ## Project Structure
 
-```
+```text
 Traffic_insights_agent_BD/
-├── run.py                  # Entry point — starts the server
-├── requirements.txt        # Python dependencies
-├── app/                    # Backend Python package
-│   ├── __init__.py
-│   ├── config.py           # Configuration & constants
-│   ├── database.py         # SQLite models & queries
-│   ├── extractor.py        # NLP-based data extraction
-│   ├── routes.py           # FastAPI route definitions
-│   ├── scheduler.py        # APScheduler background job
-│   ├── scraper.py          # Web scraper (The Daily Star)
-│   └── server.py           # Application factory
-├── data/                   # SQLite database (auto-created)
-│   └── accidents.db
-└── static/                 # Frontend assets
-    ├── index.html           # Dashboard markup
-    ├── css/
-    │   └── styles.css       # All styles
-    └── js/
-        ├── utils.js         # Shared state & helpers
-        ├── dashboard.js     # Dashboard tab logic
-        ├── daily.js         # Daily analysis tab
-        ├── monthly.js       # Monthly analysis tab
-        ├── map.js           # Leaflet map & heatmap
-        ├── zones.js         # Danger zones tab
-        ├── records.js       # Records table & search
-        └── app.js           # Tab switching & init
+├── run.py
+├── requirements.txt
+├── .env.example
+├── app/
+│   ├── config.py
+│   ├── database.py
+│   ├── scraper.py
+│   ├── routes.py
+│   ├── extractor.py
+│   ├── geo.py
+│   ├── normalize.py
+│   └── llm/
+│       ├── openai_client.py
+│       ├── llm_schema.py
+│       └── llm_extractor.py
+├── data/
+│   ├── accidents.db
+│   ├── llm_extraction_responses.log
+│   └── llm_extraction_failures.log
+└── static/
 ```
-
----
 
 ## Quick Start
 
-### 1. Clone & Navigate
+### 1) Setup
 
 ```bash
 git clone <your-repo-url>
 cd Traffic_insights_agent_BD
-```
-
-### 2. Create a Virtual Environment (recommended)
-
-```bash
 python3 -m venv .venv
-source .venv/bin/activate        # macOS / Linux
-# .venv\Scripts\activate         # Windows
-```
-
-### 3. Install Dependencies
-
-```bash
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Run the Application
+### 2) Configure OpenAI
+
+```bash
+cp .env.example .env
+```
+
+Required environment values:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_SECONDS=60
+OPENAI_RETRIES=2
+MAX_DEATHS_PER_EVENT=50
+MAX_INJURIES_PER_EVENT=200
+```
+
+### 3) Run the server
 
 ```bash
 python run.py
 ```
 
-The server starts at **http://localhost:8000** — open it in your browser to see the dashboard.
+Open `http://localhost:8000`
 
-> **Note:** The SQLite database (`data/accidents.db`) is created automatically on first run. No extra setup needed.
+### 4) Trigger scraping
 
-### 5. Start Scraping Data
+```bash
+curl -X POST http://localhost:8000/api/scrape
+```
 
-You won't see any data on the dashboard until you run your first scrape:
+If the result says `found N, 0 new`, the scraper found URLs already present in `articles`, so new extraction was skipped for those URLs.
 
-- Click the **"Scrape Now"** button in the top-right corner of the dashboard, or
-- Manually trigger via API:
-  ```bash
-  curl -X POST http://localhost:8000/api/scrape
-  ```
-- Or just wait — the built-in scheduler scrapes automatically every 6 hours.
+### 5) Reprocess all existing articles
 
-The first scrape may take 1–2 minutes as it fetches and processes articles from The Daily Star.
+Use this only if you intentionally want to re-run extraction on existing article content.
 
----
+```bash
+python3 -c "from app.extractor import reprocess_all_articles; print(reprocess_all_articles())"
+```
 
-## Using the Dashboard
+Note: reprocessing does not deduplicate existing accident rows.
 
-Once the server is running, open **http://localhost:8000** in any browser. The UI is a single-page dark-themed dashboard with six tabs across the top:
+### 6) Backfill missing published dates
 
-### Dashboard (Home)
+Use this when existing `articles.published_date` values are `NULL`.
 
-This is the landing page. It shows:
-- **Summary cards** — total accidents, deaths, injuries, today's count, and number of articles scraped.
-- **30-day trend line** — accidents, deaths, and injuries over the last month.
-- **Accident types doughnut** — breakdown of the current month by type (bus crash, hit-and-run, etc.).
-- **Top danger districts bar chart** — the most accident-prone districts.
+```bash
+curl -X POST "http://localhost:8000/api/backfill-published-dates?limit=5000"
+```
 
-### Daily Analysis
+This also syncs `accidents.accident_date` to the repaired article published date.
 
-Pick any date using the date picker at the top. The page updates with:
-- Stat cards for that day (accidents, deaths, injuries).
-- A pie chart of accident types and a bar chart by district for that specific day.
+### 7) Start from a fresh database
 
-### Monthly Analysis
+```bash
+rm -f data/accidents.db
+rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log
+python run.py
+```
 
-Select a year and month from the dropdowns. You'll see:
-- Monthly totals plus the daily average.
-- A bar chart showing the day-by-day breakdown within that month.
-- Accident types and top districts for the selected month.
+Then trigger:
 
-### Danger Map
+```bash
+curl -X POST http://localhost:8000/api/scrape
+```
 
-An interactive **Leaflet** map centered on Bangladesh. Toggle between two views:
-- **Markers** — clustered circle markers; click a cluster to zoom in, click an individual marker to see accident details (type, date, casualties, link to source article).
-- **Heatmap** — color-coded intensity overlay highlighting the most dangerous areas.
+## End-to-End Workflow
 
-### Danger Zones
+1. Scraper fetches New Age road-accident listing pages.
+2. Article links are collected from each page.
+3. Each article page is scraped for title, content, and the article's published date from the article header.
+4. The article is inserted into `articles`.
+5. OpenAI returns strict JSON shaped as `{"accidents": [...]}`.
+6. Backend validation, normalization, and filtering are applied.
+7. One or more rows are inserted into `accidents`.
+8. API endpoints serve the dashboard and records views.
 
-A ranked list of the top 20 most accident-prone **districts**, showing total accidents, deaths, and injuries for each. Cards are sorted by frequency.
+## Guardrails and Business Rules
 
-### Records
+- LLM output must match a strict JSON schema.
+- District must be one of the backend-supported districts or `null`.
+- Locality names are normalized in backend code to parent districts where applicable.
+- Coordinates are never generated by the LLM.
+- Latitude and longitude come only from backend mappings in `app/geo.py`.
+- Aggregate or historical report-style items are filtered before DB insert.
+- Casualty sanity caps are enforced before insert.
+- `published_date` is taken from the article-specific New Age publish timestamp, not a generic page date.
+- `accident_date` is assigned from `articles.published_date`.
+- One article can generate multiple accident rows.
 
-A full searchable table of every extracted accident. Columns include date, type, location, district, deaths, injuries, vehicles, and a link to the original article. Use the search box to filter by location, type, or any keyword.
+## Current Limitations
 
-### Scrape Now Button
+- Aggregate and historical filtering is heuristic and may still allow false positives or reject borderline valid stories.
+- Accident-level deduplication is not implemented; only article URLs are unique.
+- Reprocessing existing articles can create duplicate rows in `accidents`.
+- Published date parsing depends on New Age article markup remaining consistent.
+- The canonical publish-date rule may differ from the actual event date mentioned in the article.
+- Scraper reliability depends on the current HTML structure of New Age pages.
+- There is no dedicated automated test suite yet.
 
-The **"Scrape Now"** button in the header triggers an immediate scrape. While running, the button shows a spinner. When done, a toast notification reports how many articles were found and how many were new. The dashboard auto-refreshes with the latest data.
+## Logging
 
----
+```bash
+tail -f data/llm_extraction_responses.log
+tail -f data/llm_extraction_failures.log
+```
+
+## Operational Checks
+
+Useful SQLite checks:
+
+```bash
+sqlite3 data/accidents.db "SELECT COUNT(*) total, SUM(CASE WHEN published_date IS NOT NULL THEN 1 ELSE 0 END) with_date, SUM(CASE WHEN published_date IS NULL THEN 1 ELSE 0 END) missing FROM articles;"
+sqlite3 data/accidents.db "SELECT a.id, a.article_id, ar.published_date, a.accident_date FROM accidents a JOIN articles ar ON ar.id = a.article_id ORDER BY a.id DESC LIMIT 20;"
+sqlite3 data/accidents.db "SELECT MIN(published_date), MAX(published_date), COUNT(DISTINCT published_date) FROM articles;"
+```
+
+Quick quality checks:
+
+```bash
+flake8 app/
+python3 -m compileall app run.py
+```
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Dashboard frontend |
-| `GET` | `/api/overview` | Overall statistics |
-| `GET` | `/api/daily?date=YYYY-MM-DD` | Daily accident stats |
-| `GET` | `/api/monthly?year=2026&month=2` | Monthly accident stats |
-| `GET` | `/api/danger-zones?limit=20` | Top danger zones |
-| `GET` | `/api/recent?limit=50` | Recent accident records |
-| `GET` | `/api/map-data` | All accidents with coordinates |
-| `GET` | `/api/trend?days=30` | Accident trend data |
-| `GET` | `/api/yearly` | Yearly/monthly overview |
-| `GET` | `/api/search?q=Dhaka` | Search accidents |
-| `POST` | `/api/scrape` | Trigger manual scrape |
-| `GET` | `/api/scrape-logs` | Recent scrape history |
-
----
-
-## How It Works
-
-1. **Scraping**: The scraper visits The Daily Star's `/tags/road-accident` page, collects article links, and fetches full article content
-
-2. **Extraction**: Each article is processed by the NLP extractor which uses regex patterns to identify:
-   - **Accident type** (bus crash, hit-and-run, collision, etc.)
-   - **Location** (maps to 64 districts + sub-areas of Bangladesh)
-   - **Casualties** (death and injury counts from text)
-   - **Vehicles involved** (bus, truck, motorcycle, etc.)
-
-3. **Storage**: Structured data is stored in SQLite with proper indexing for fast queries
-
-4. **Visualization**: The frontend fetches data via REST APIs and renders interactive charts, maps, and tables
-
----
-
-## Configuration
-
-Edit `app/config.py` to customize:
-
-```python
-SCRAPE_INTERVAL_HOURS = 6     # Scraping frequency
-MAX_PAGES_PER_SCRAPE = 5      # Pages to scrape per cycle
-REQUEST_DELAY = 2             # Politeness delay between requests
-API_PORT = 8000               # Server port
-```
-
----
-
-## Data Source
-
-All data is sourced from **[The Daily Star](https://www.thedailystar.net)**, one of Bangladesh's leading English-language newspapers. The scraper specifically targets their [road accident tag](https://www.thedailystar.net/tags/road-accident) page.
-
-> **Disclaimer**: This tool is for educational and awareness purposes. Please respect The Daily Star's terms of service and robots.txt. Use responsibly with appropriate rate limiting.
-
----
+- `GET /api/overview`
+- `GET /api/daily?date=YYYY-MM-DD`
+- `GET /api/monthly?year=YYYY&month=M`
+- `GET /api/danger-zones?limit=20`
+- `GET /api/map-data`
+- `GET /api/recent?limit=50`
+- `GET /api/search?q=Dhaka`
+- `GET /api/trend?days=30`
+- `GET /api/yearly`
+- `GET /api/scrape-logs?limit=20`
+- `POST /api/scrape`
+- `POST /api/backfill-published-dates?limit=5000`
 
 ## License
 
-MIT License — Use freely for educational and research purposes.
+MIT

@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, date
 from typing import Optional
 
-from app.config import DB_PATH
+from app.config import DB_PATH, NEWS_SOURCE_NAME
 
 
 def get_connection() -> sqlite3.Connection:
@@ -31,7 +31,7 @@ def init_db():
             content TEXT,
             published_date DATE,
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            source TEXT DEFAULT 'The Daily Star'
+            source TEXT DEFAULT 'New Age'
         );
 
         CREATE TABLE IF NOT EXISTS accidents (
@@ -83,18 +83,71 @@ def article_exists(url: str) -> bool:
 
 
 def insert_article(url: str, title: str, content: str,
-                   published_date: Optional[date] = None) -> int:
+                   published_date: Optional[date] = None,
+                   source: str = NEWS_SOURCE_NAME) -> int:
     """Insert a new article and return its ID."""
     conn = get_connection()
     cursor = conn.execute(
-        """INSERT INTO articles (url, title, content, published_date)
-           VALUES (?, ?, ?, ?)""",
-        (url, title, content, published_date)
+        """INSERT INTO articles (url, title, content, published_date, source)
+           VALUES (?, ?, ?, ?, ?)""",
+        (url, title, content, published_date, source)
     )
     article_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return article_id
+
+
+def get_article_by_url(url: str) -> Optional[dict]:
+    """Get article metadata by URL."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, url, published_date FROM articles WHERE url = ?",
+        (url,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_articles_missing_published_date(limit: Optional[int] = None) -> list[dict]:
+    """Return articles where published_date is not yet captured."""
+    conn = get_connection()
+    if limit:
+        rows = conn.execute(
+            "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC"
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_article_published_date(article_id: int, published_date: date):
+    """Update article published date."""
+    # Single-purpose helper used by scrape-time repair and explicit backfill.
+    conn = get_connection()
+    conn.execute(
+        "UPDATE articles SET published_date = ? WHERE id = ?",
+        (published_date, article_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def sync_accident_dates_for_article(article_id: int, published_date: date):
+    """Sync all accidents for article to canonical article publish date."""
+    # Business rule: accident_date is derived from article published_date for
+    # all events extracted from that article (including multi-event stories).
+    conn = get_connection()
+    conn.execute(
+        "UPDATE accidents SET accident_date = ? WHERE article_id = ?",
+        (published_date, article_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def insert_accident(article_id: int, accident_type: str = None,
