@@ -5,7 +5,10 @@ Supports dev / prod environments via APP_ENV environment variable.
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load the repository .env explicitly so settings do not depend on the
+# process working directory.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # ─── Environment ───────────────────────────────────────────────
 APP_ENV = os.getenv("APP_ENV", "development")       # "development" | "production"
@@ -13,7 +16,6 @@ DEBUG = APP_ENV == "development"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
 
 # ─── Base Paths ────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "accidents.db"))
