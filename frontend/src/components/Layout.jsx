@@ -1,7 +1,7 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
 import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload, FaUsers } from 'react-icons/fa';
-import { useState } from 'react';
-import { postApi } from '../utils/api';
+import { useState, useEffect } from 'react';
+import { api, postApi } from '../utils/api';
 import ToastContainer from './ToastContainer';
 import AlertBanner from './AlertBanner';
 import { useToast } from '../utils/useToast';
@@ -23,8 +23,15 @@ const tabs = [
 export default function Layout() {
   const [scraping, setScraping] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('');
+  const [extractionMode, setExtractionMode] = useState('');
   const { toasts, addToast } = useToast();
   const { theme, toggle: toggleTheme } = useTheme();
+
+  useEffect(() => {
+    api('/overview').then(d => {
+      if (d.extraction_mode) setExtractionMode(d.extraction_mode);
+    }).catch(() => {});
+  }, []);
 
   const handleScrape = async () => {
     setScraping(true);
@@ -63,6 +70,11 @@ export default function Layout() {
             </div>
           </Link>
           <div className="header-actions">
+            {extractionMode && (
+              <span className={`extraction-badge ${extractionMode}`} title={extractionMode === 'advanced' ? 'AI-powered extraction' : 'Pattern-based extraction'}>
+                {extractionMode === 'advanced' ? '⚡ Advanced' : '🔧 Standard'}
+              </span>
+            )}
             {lastUpdate && <span className="last-update">Last scraped: {lastUpdate}</span>}
             <button className="btn btn-icon theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
               {theme === 'dark' ? <FaSun /> : <FaMoon />}

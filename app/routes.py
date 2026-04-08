@@ -21,6 +21,7 @@ from app.rate_limit import scrape_limiter
 from app import database as db
 from app.config import STATIC_DIR
 from app.scraper import run_scraper, run_published_date_backfill
+from app.extractor import get_extraction_mode
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ async def get_overview(
                     "injuries": today_row["injuries"],
                 },
                 "last_scrape": dict(last_scrape) if last_scrape else None,
+                "extraction_mode": get_extraction_mode(),
             }
     except Exception as e:
         logger.error(f"Error getting overview: {e}")
