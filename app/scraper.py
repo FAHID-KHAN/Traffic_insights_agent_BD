@@ -67,6 +67,8 @@ class NewAgeScraper:
         candidate = re.sub(r"\b([A-Za-z]+)\.?(\d{1,2},\s+\d{4})", r"\1 \2", candidate)
 
         formats = [
+            "%d %B %Y, %H:%M %p",   # 19 February 2026, 12:08 PM  (Daily Star)
+            "%d %B %Y, %H:%M",      # 19 February 2026, 12:08
             "%Y-%m-%dT%H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%dT%H:%M:%S",
@@ -108,6 +110,21 @@ class NewAgeScraper:
                     return datetime.strptime(textual_match.group(1), fmt).date()
                 except ValueError:
                     continue
+
+        # Regex fallbacks
+        match = re.search(
+            r"(\d{1,2})\s+(January|February|March|April|May|June|July|"
+            r"August|September|October|November|December)\s+(\d{4})",
+            candidate, re.IGNORECASE,
+        )
+        if match:
+            try:
+                return datetime.strptime(
+                    f"{match.group(1)} {match.group(2)} {match.group(3)}",
+                    "%d %B %Y",
+                ).date()
+            except ValueError:
+                pass
 
         return None
 
@@ -322,9 +339,12 @@ class NewAgeScraper:
 
     def run_scrape(self) -> Dict:
         """Run a full scrape cycle."""
+        from app.extractor import AccidentExtractor
+
         log_id = start_scrape_log()
         total_found = 0
         total_new = 0
+        extractor = AccidentExtractor()  # reuse one instance
 
         try:
             for page in range(1, MAX_PAGES_PER_SCRAPE + 1):
@@ -335,6 +355,8 @@ class NewAgeScraper:
                     logger.info("No articles on page %s, stopping pagination", page)
                     break
 
+                page_new = 0
+                page_dupes = 0
                 for article_info in article_links:
                     url = article_info["url"]
                     if article_exists(url):
@@ -348,11 +370,19 @@ class NewAgeScraper:
                             if article_data and article_data.get("published_date"):
                                 update_article_published_date(existing["id"], article_data["published_date"])
                                 sync_accident_dates_for_article(existing["id"], article_data["published_date"])
+                        page_dupes += 1
                         continue
 
                     time.sleep(REQUEST_DELAY)
                     article_data = self.scrape_article(url)
                     if article_data and article_data.get("content"):
+                        # Use published_date from article, fall back to listing title hint, then None
+                        pub_date = article_data.get("published_date")
+                        if pub_date is None:
+                            logger.warning(
+                                f"Could not parse date for article: {url} — storing without date"
+                            )
+
                         article_id = insert_article(
                             url=article_data["url"],
                             title=article_data.get("title", article_info["title"]),
@@ -360,15 +390,23 @@ class NewAgeScraper:
                             published_date=article_data.get("published_date"),
                             source=NEWS_SOURCE_NAME,
                         )
+                        page_new += 1
                         total_new += 1
                         logger.info("Saved article #%s: %s", article_id, article_data.get("title", "")[:60])
 
-                        from app.llm.llm_extractor import LLMAccidentExtractor
-                        LLMAccidentExtractor().process_article(
+                        extractor.process_article(
                             article_id,
                             article_data["content"],
-                            article_data.get("published_date"),
+                            pub_date,
                         )
+
+                # Early termination: if all articles on this page were duplicates, stop
+                if page_dupes > 0 and page_new == 0:
+                    logger.info(
+                        f"All {page_dupes} articles on page {page} already exist, "
+                        f"stopping pagination early"
+                    )
+                    break
 
                 time.sleep(REQUEST_DELAY)
 

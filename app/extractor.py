@@ -27,9 +27,8 @@ class AccidentExtractor:
 
 def reprocess_all_articles() -> int:
     """Re-process all existing articles using the LLM extractor."""
-    conn = db.get_connection()
-    articles = conn.execute("SELECT id, content, published_date FROM articles").fetchall()
-    conn.close()
+    with db.get_db() as conn:
+        articles = conn.execute("SELECT id, content, published_date FROM articles").fetchall()
 
     extractor = LLMAccidentExtractor()
     processed = 0
