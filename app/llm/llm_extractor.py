@@ -26,7 +26,9 @@ _SYSTEM_PROMPT = (
     "You are an information extraction engine. Extract road-accident events from a news article. "
     "Return ONLY valid JSON matching the given schema. Do not include markdown. "
     "Do not invent facts. If a field is not stated, use null (or 0 for counts). "
-    "If multiple accidents are described, return multiple entries."
+    "If multiple accidents are described, return multiple entries. "
+    "For road_name, extract the specific highway or road name if mentioned "
+    "(e.g. 'Dhaka-Chittagong Highway', 'N1', 'Dhaka-Mymensingh Highway'). Use null if not stated."
 )
 
 _NON_DISTRICT_LOCATIONS = {
@@ -39,7 +41,6 @@ _ALLOWED_DISTRICTS = sorted(
     district for district in DISTRICT_COORDINATES.keys() if district not in _NON_DISTRICT_LOCATIONS
 )
 
-# FORCING LLM to respond in this JSON Structure--------------------------
 _EXTRACTION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -60,6 +61,7 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                         "type": ["array", "null"],
                         "items": {"type": "string"},
                     },
+                    "road_name": {"type": ["string", "null"]},
                     "accident_date": {"type": ["string", "null"]},
                     "summary": {"type": ["string", "null"]},
                     "confidence": {"type": ["number", "null"]},
@@ -72,6 +74,7 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                     "deaths",
                     "injuries",
                     "vehicles_involved",
+                    "road_name",
                     "accident_date",
                     "summary",
                     "confidence",
@@ -191,6 +194,7 @@ class LLMAccidentExtractor:
                 deaths=event.deaths,
                 injuries=event.injuries,
                 vehicles_involved=vehicles,
+                road_name=event.road_name,
                 accident_date=accident_dt,
                 summary=event.summary,
             )
@@ -207,7 +211,10 @@ class LLMAccidentExtractor:
 
         return inserted_ids
 
+    _MAX_CONTENT_CHARS = 8000
+
     def _build_user_prompt(self, content: str, published_date: Optional[date]) -> str:
+        content = content[:self._MAX_CONTENT_CHARS]
         district_list = ", ".join(_ALLOWED_DISTRICTS)
         pub = published_date.isoformat() if published_date else "null"
         return (

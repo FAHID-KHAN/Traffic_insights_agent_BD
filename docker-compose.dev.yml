@@ -1,0 +1,35 @@
+# ───────────────────────────────────────────────────────────────
+# Docker Compose — Development
+# Usage:  docker compose -f docker-compose.dev.yml up --build
+# ───────────────────────────────────────────────────────────────
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: traffic-insight-dev
+    env_file: .env.development
+    environment:
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+      - CORS_ORIGINS=*
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the database across rebuilds
+      - dev-data:/app/data
+      # Mount app code for live changes (backend only — frontend needs rebuild)
+      - ./app:/app/app:ro
+      - ./run.py:/app/run.py:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/overview"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  dev-data:
+    driver: local

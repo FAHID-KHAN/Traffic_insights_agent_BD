@@ -3,11 +3,35 @@ __pycache__/
 *.pyo
 .venv/
 .env
+.env.local
+.env.*.local
+.env.production
 instructions.md:Zone.Identifier
 missing_published_dates.txt
 published_date_captured_links.txt
+
 # Local Codex skills
 skills/
 .codex
 AGENTS.md
-data/
+
+# Data
+data/*.db
+data/*.log
+
+# Frontend
+node_modules/
+static/dist/
+
+# Docker volumes / backups
+backups/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,75 @@
+import { useState, useEffect } from 'react';
+import BDLogo from './BDLogo';
+
+/**
+ * Branded splash screen shown while the app initializes.
+ * Displays the BD logo with a pulse animation, app name,
+ * a gradient progress bar, and fades out after data is ready.
+ */
+export default function SplashScreen({ onFinished }) {
+  const [progress, setProgress] = useState(0);
+  const [fadeOut, setFadeOut] = useState(false);
+
+  useEffect(() => {
+    // Animate progress bar 0→100 over ~2.8s
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          return 100;
+        }
+        // Ease-out: start fast, slow near end
+        const increment = Math.max(1, Math.floor((100 - prev) / 12));
+        return Math.min(prev + increment, 100);
+      });
+    }, 60);
+
+    // Minimum display time ensures the splash isn't just a flash
+    const minTimer = setTimeout(() => {
+      setFadeOut(true);
+    }, 3200);
+
+    const exitTimer = setTimeout(() => {
+      onFinished?.();
+    }, 4000); // 3.2s display + 0.8s fade-out
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(minTimer);
+      clearTimeout(exitTimer);
+    };
+  }, [onFinished]);
+
+  return (
+    <div className={`splash-screen ${fadeOut ? 'splash-fade-out' : ''}`}>
+      <div className="splash-content">
+        <div className="splash-logo">
+          <BDLogo size={80} />
+        </div>
+
+        <h1 className="splash-title">
+          Traffic Insight <span className="splash-title-accent">BD</span>
+        </h1>
+
+        <p className="splash-tagline">Bangladesh Road Safety Analytics</p>
+
+        <div className="splash-progress-track">
+          <div
+            className="splash-progress-bar"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <p className="splash-status">
+          {progress < 30 ? 'Initializing...' :
+           progress < 70 ? 'Loading dashboard...' :
+           progress < 100 ? 'Almost ready...' : 'Welcome'}
+        </p>
+      </div>
+
+      <div className="splash-bg-circle splash-bg-circle-1" />
+      <div className="splash-bg-circle splash-bg-circle-2" />
+      <div className="splash-bg-circle splash-bg-circle-3" />
+    </div>
+  );
+}

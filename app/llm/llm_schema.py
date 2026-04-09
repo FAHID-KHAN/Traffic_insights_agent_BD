@@ -14,6 +14,7 @@ class AccidentEvent(BaseModel):
     deaths: int = Field(default=0, ge=0)
     injuries: int = Field(default=0, ge=0)
     vehicles_involved: list[str] | None = None
+    road_name: str | None = None
     accident_date: str | None = None
     summary: str | None = None
     confidence: float | None = None
@@ -23,6 +24,7 @@ class AccidentEvent(BaseModel):
         "location_raw",
         "district",
         "division",
+        "road_name",
         "accident_date",
         "summary",
         mode="before",

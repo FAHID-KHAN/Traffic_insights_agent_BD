@@ -1,0 +1,21 @@
+# Containers
+*.db-journal
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+.git/
+.github/
+*.md
+.env.*
+
+# Runtime data (seeded separately via SCP)
+data/
+backups/
+
+# Not needed in image
+tests/
+docs/
+*.log
+.DS_Store

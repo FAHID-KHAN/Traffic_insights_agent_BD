@@ -1,0 +1,59 @@
+# ───────────────────────────────────────────────────────────────
+# Deploy to Production — triggered after CI passes on main
+# ───────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # don't cancel in-flight deploys
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only deploy if CI succeeded (not failed/cancelled)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            cd /opt/Traffic_insights_agent_BD
+
+            # Pull latest code
+            git pull origin main
+
+            # Rebuild and restart (DB persists on named volume)
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            # Wait for container to become healthy
+            echo "Waiting for health check..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/api/overview > /dev/null 2>&1; then
+                echo "Health check passed!"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Health check failed after 30 attempts"
+                docker compose -f docker-compose.prod.yml logs --tail=50
+                exit 1
+              fi
+              sleep 2
+            done
+
+            # Clean up old images
+            docker image prune -f
