@@ -27,6 +27,7 @@
 16. [Troubleshooting](#16-troubleshooting)
 17. [Security Checklist](#17-security-checklist)
 18. [Disaster Recovery](#18-disaster-recovery)
+19. [Security Hardening (April 2026)](#19-security-hardening-april-2026)
 
 ---
 
@@ -334,6 +335,9 @@ OPENAI_RETRIES=2
 # Extraction guardrails
 MAX_DEATHS_PER_EVENT=50
 MAX_INJURIES_PER_EVENT=200
+
+# Admin API key (required for POST /api/scrape and /api/backfill-published-dates)
+ADMIN_API_KEY=<generate-with-python3 -c "import secrets; print(secrets.token_urlsafe(32))">
 EOF
 
 chown deploy:deploy /opt/Traffic_insights_agent_BD/.env.production
@@ -360,6 +364,7 @@ ENVFILE
 | `OPENAI_RETRIES`          | `2`                      | Retry count for failed LLM calls                  |
 | `MAX_DEATHS_PER_EVENT`    | `50`                     | Guardrail: reject if deaths exceed this           |
 | `MAX_INJURIES_PER_EVENT`  | `200`                    | Guardrail: reject if injuries exceed this         |
+| `ADMIN_API_KEY`           | `<random-token>`         | Required for admin endpoints (scrape, backfill)   |
 
 ---
 
@@ -379,6 +384,8 @@ Stage 2: runtime (python:3.13-slim)
   ├── pip install             → install Python deps
   ├── COPY app/, run.py       → application code
   ├── COPY --from=frontend-build /static/dist → built frontend
+  ├── useradd appuser         → non-root user for security
+  ├── USER appuser            → all subsequent commands run as appuser
   ├── HEALTHCHECK             → curl /api/overview
   └── CMD python run.py
 ```
@@ -1159,8 +1166,8 @@ sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 # Check scheduler logs
 docker logs traffic-insight-prod 2>&1 | grep -i "scheduler\|scrape"
 
-# Trigger manual scrape
-curl -X POST http://localhost:8080/api/scrape
+# Trigger manual scrape (requires admin key)
+curl -X POST -H 'X-Admin-Key: <YOUR_ADMIN_KEY>' http://localhost:8080/api/scrape
 
 # Check last scrape status via API
 curl -s http://localhost:8080/api/overview | python3 -m json.tool | grep scrape
@@ -1175,6 +1182,13 @@ curl -s http://localhost:8080/api/overview | python3 -m json.tool | grep scrape
 | SSH key auth only (no passwords)   | ✅     | `deploy` user, no password set                   |
 | UFW firewall active                | ✅     | Only 22, 80, 443 allowed                         |
 | Non-root application user          | ✅     | `deploy` user runs Docker                        |
+| Non-root Docker container          | ✅     | Runs as `appuser` (not root) inside container    |
+| Admin endpoints authenticated      | ✅     | `X-Admin-Key` header required for scrape/backfill|
+| Path traversal protection          | ✅     | `os.path.realpath()` + `startswith()` guard      |
+| SQL injection mitigation           | ✅     | Whitelist validation on migration helper          |
+| Exception details hidden           | ✅     | API returns generic error, no stack traces        |
+| Query result limits                | ✅     | CSV export 10K, map data 5K row caps             |
+| LLM content truncation             | ✅     | Article content capped at 8K chars before LLM    |
 | HTTPS enforced                     | ✅     | HTTP 301 → HTTPS                                 |
 | HSTS header                        | ✅     | `max-age=63072000; includeSubDomains; preload`   |
 | CSP header                         | ✅     | Restricts scripts, images, frames                |
@@ -1239,6 +1253,127 @@ scp root@168.144.44.239:/tmp/accidents.db ./accidents_backup_$(date +%Y%m%d).db
 
 ---
 
+## 19. Security Hardening (April 2026)
+
+A comprehensive security audit was performed and the following Critical (C) and High (H) vulnerabilities were patched in commit `80c91b0f`.
+
+### 19.1. Summary of Fixes
+
+| ID  | Severity | Vulnerability                          | File(s) Changed            | Fix Applied                                                |
+|-----|----------|----------------------------------------|----------------------------|------------------------------------------------------------|
+| C1  | Critical | Path traversal in SPA catch-all        | `app/server.py`            | `os.path.realpath()` + `startswith()` prevents `../` escape |
+| C2  | Critical | Unauthenticated admin endpoints        | `app/routes.py`, `app/config.py` | `X-Admin-Key` header + constant-time comparison (`secrets.compare_digest`) |
+| H1  | High     | SQL injection in DB migration helper   | `app/database.py`          | Whitelist validation for table, column, and type names     |
+| H2  | High     | Exception details leaked in API        | `app/routes.py`            | Replaced `detail=str(e)` with generic `"Internal server error"` |
+| H3  | High     | Unbounded CSV export                   | `app/routes.py`            | Added `LIMIT 10000` to export query                        |
+| H4  | High     | Unbounded map-data query               | `app/database.py`          | Added `LIMIT 5000` to `get_all_accidents_for_map()`        |
+| H5  | High     | CORS wildcard default                  | `app/config.py`            | Default changed from `*` to `http://localhost:5173`        |
+| H6  | High     | Docker container runs as root          | `Dockerfile`               | Added `useradd appuser` + `USER appuser`                   |
+| H7  | High     | LLM prompt injection via long content  | `app/llm/llm_extractor.py` | Article content truncated to 8,000 characters              |
+
+### 19.2. C1 — Path Traversal Protection
+
+**Before:** The `/{path:path}` catch-all route served any file matching the path under `static/dist/` without validating that the resolved path stays within the allowed directory.
+
+**After (`app/server.py`):**
+```python
+file_path = os.path.realpath(os.path.join(REACT_DIST, path))
+if not file_path.startswith(os.path.realpath(REACT_DIST)):
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
+```
+
+### 19.3. C2 — Admin Endpoint Authentication
+
+**Before:** `POST /api/scrape` and `POST /api/backfill-published-dates` were only rate-limited — anyone could trigger scrapes.
+
+**After:** Both endpoints require an `X-Admin-Key` header verified via `secrets.compare_digest()` (constant-time comparison to prevent timing attacks).
+
+**Configuration:**
+```bash
+# Generate a key
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Add to .env.production on the server
+echo 'ADMIN_API_KEY=<generated-key>' >> .env.production
+```
+
+**Usage:**
+```bash
+# Trigger scrape
+curl -X POST -H 'X-Admin-Key: <YOUR_KEY>' https://trafficinsightbd.org/api/scrape
+
+# Trigger backfill
+curl -X POST -H 'X-Admin-Key: <YOUR_KEY>' https://trafficinsightbd.org/api/backfill-published-dates
+```
+
+**Behaviour without key:**
+- Missing header → `422 Unprocessable Entity`
+- Invalid key → `403 Forbidden`
+- `ADMIN_API_KEY` not configured → `503 Service Unavailable`
+
+### 19.4. H1 — SQL Injection in Migration Helper
+
+**Before:** `_migrate_add_column()` used f-strings with unchecked table/column/type parameters.
+
+**After (`app/database.py`):**
+```python
+_ALLOWED_TABLES = {"accidents", "articles", "scrape_log"}
+_ALLOWED_COL_RE = re.compile(r"^[a-z_][a-z0-9_]{0,63}$")
+_ALLOWED_TYPES  = {"TEXT", "INTEGER", "REAL", "BLOB", "NUMERIC"}
+```
+
+All three parameters are validated against whitelists before any SQL is executed.
+
+### 19.5. H6 — Non-Root Docker Container
+
+**Before:** The container ran all processes as `root`.
+
+**After (`Dockerfile`):**
+```dockerfile
+RUN useradd --create-home --no-log-init appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+```
+
+**Important — volume permissions:** After rebuilding, the named Docker volume may still have root-owned files. Fix with:
+```bash
+# One-time fix using a temporary Alpine container
+docker run --rm -v traffic_insights_agent_bd_prod-data:/data alpine chown -R 1000:1000 /data
+```
+
+### 19.6. Deployment Steps for Security Update
+
+```bash
+# 1. Pull latest code on the server
+ssh deploy@168.144.44.239
+cd /opt/Traffic_insights_agent_BD
+git pull
+
+# 2. Add ADMIN_API_KEY to .env.production (if not already present)
+grep -q ADMIN_API_KEY .env.production || \
+  echo "ADMIN_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env.production
+
+# 3. Stop container
+docker compose -f docker-compose.prod.yml down
+
+# 4. Fix volume permissions for non-root user
+docker run --rm -v traffic_insights_agent_bd_prod-data:/data alpine chown -R 1000:1000 /data
+
+# 5. Rebuild and start
+docker compose -f docker-compose.prod.yml build --no-cache
+docker compose -f docker-compose.prod.yml up -d
+
+# 6. Verify
+docker ps                    # Should show (healthy) after ~30s
+curl -sf http://localhost:8080/api/overview | head -c 100   # API works
+curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/scrape   # 422 (no key)
+curl -s -o /dev/null -w '%{http_code}' -X POST \
+  -H "X-Admin-Key: $(grep ADMIN_API_KEY .env.production | cut -d= -f2)" \
+  http://localhost:8080/api/scrape   # 200 (with key)
+```
+
+---
+
 ## Quick Reference Card
 
 ```
@@ -1266,7 +1401,7 @@ scp root@168.144.44.239:/tmp/accidents.db ./accidents_backup_$(date +%Y%m%d).db
   docker cp traffic-insight-prod:/app/data/accidents.db ./backup.db
 
   ── Trigger Scrape ──────────────────────────────────────────
-  curl -X POST http://localhost:8080/api/scrape
+  curl -X POST -H 'X-Admin-Key: <YOUR_ADMIN_KEY>' http://localhost:8080/api/scrape
 
   ── SSL Renew ───────────────────────────────────────────────
   certbot renew && systemctl reload nginx
