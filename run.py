@@ -5,7 +5,7 @@ from pathlib import Path
 
 import uvicorn
 from app.server import create_app
-from app.config import API_HOST, API_PORT, DEBUG
+from app.config import API_HOST, API_PORT, DEBUG, WEB_WORKERS
 
 
 app = create_app()
@@ -15,11 +15,11 @@ if __name__ == "__main__":
     uvicorn_kwargs = {
         "host": API_HOST,
         "port": API_PORT,
-        "reload": DEBUG,
         "log_level": "debug" if DEBUG else "warning",
     }
 
     if DEBUG:
+        uvicorn_kwargs["reload"] = True
         uvicorn_kwargs.update(
             {
                 "reload_dirs": [
@@ -37,5 +37,7 @@ if __name__ == "__main__":
                 ],
             }
         )
+    else:
+        uvicorn_kwargs["workers"] = WEB_WORKERS
 
     uvicorn.run("run:app", **uvicorn_kwargs)

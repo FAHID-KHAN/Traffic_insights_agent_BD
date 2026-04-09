@@ -58,6 +58,7 @@ BANGLADESH_DISTRICTS = [
 # ─── Server Settings ───────────────────────────────────────────
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
+WEB_WORKERS = int(os.getenv("WEB_WORKERS", "1" if DEBUG else "4"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")   # comma-separated in prod
 
 # ─── LLM Extraction Settings ────────────────────────────────────
