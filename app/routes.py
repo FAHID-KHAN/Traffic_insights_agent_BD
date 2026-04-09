@@ -334,8 +334,6 @@ async def get_youtube_videos(
     return videos[:limit]
 
 
-# ─── Search & Trend ────────────────────────────────────────────
-
 # ─── Comparative Analytics ──────────────────────────────────────
 
 @router.get("/compare/monthly")

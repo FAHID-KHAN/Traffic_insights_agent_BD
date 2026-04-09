@@ -43,20 +43,16 @@ export default function SplashScreen({ onFinished }) {
   return (
     <div className={`splash-screen ${fadeOut ? 'splash-fade-out' : ''}`}>
       <div className="splash-content">
-        {/* Animated logo */}
         <div className="splash-logo">
           <BDLogo size={80} />
         </div>
 
-        {/* App name */}
         <h1 className="splash-title">
           Traffic Insight <span className="splash-title-accent">BD</span>
         </h1>
 
-        {/* Tagline */}
         <p className="splash-tagline">Bangladesh Road Safety Analytics</p>
 
-        {/* Progress bar */}
         <div className="splash-progress-track">
           <div
             className="splash-progress-bar"
@@ -71,7 +67,6 @@ export default function SplashScreen({ onFinished }) {
         </p>
       </div>
 
-      {/* Background decoration */}
       <div className="splash-bg-circle splash-bg-circle-1" />
       <div className="splash-bg-circle splash-bg-circle-2" />
       <div className="splash-bg-circle splash-bg-circle-3" />

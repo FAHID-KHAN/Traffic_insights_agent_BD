@@ -38,7 +38,6 @@ class RateLimiter:
         cutoff = now - self.window
 
         with self._lock:
-            # Remove expired timestamps
             self._hits[ip] = [t for t in self._hits[ip] if t > cutoff]
 
             if len(self._hits[ip]) >= self.max_calls:

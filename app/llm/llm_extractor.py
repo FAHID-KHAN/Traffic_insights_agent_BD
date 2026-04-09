@@ -41,7 +41,6 @@ _ALLOWED_DISTRICTS = sorted(
     district for district in DISTRICT_COORDINATES.keys() if district not in _NON_DISTRICT_LOCATIONS
 )
 
-# FORCING LLM to respond in this JSON Structure--------------------------
 _EXTRACTION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,

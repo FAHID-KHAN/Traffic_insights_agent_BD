@@ -4,7 +4,6 @@ import { Chart } from 'react-chartjs-2';
 
 ChartJS.register(...registerables);
 
-// Set global defaults
 ChartJS.defaults.color = '#94a3b8';
 ChartJS.defaults.borderColor = 'rgba(51, 65, 85, 0.5)';
 ChartJS.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";

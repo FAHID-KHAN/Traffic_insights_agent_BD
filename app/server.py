@@ -48,14 +48,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         return response
 
-# Configure logging based on environment
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# React production build directory
 REACT_DIST = os.path.join(STATIC_DIR, "dist")
 
 
@@ -87,7 +85,6 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if DEBUG else None,
     )
 
-    # CORS middleware
     origins = [o.strip() for o in CORS_ORIGINS.split(",")]
     application.add_middleware(
         CORSMiddleware,
@@ -97,10 +94,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Security headers
     application.add_middleware(SecurityHeadersMiddleware)
 
-    # API routes
     application.include_router(api_router)
 
     # React production build assets (JS/CSS bundles)

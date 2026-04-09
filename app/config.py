@@ -5,8 +5,7 @@ Supports dev / prod environments via APP_ENV environment variable.
 import os
 from dotenv import load_dotenv
 
-# Load the repository .env explicitly so settings do not depend on the
-# process working directory.
+# Load the repository .env so settings work regardless of working directory.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
@@ -69,5 +68,4 @@ OPENAI_RETRIES = int(os.getenv("OPENAI_RETRIES", "2"))
 MAX_DEATHS_PER_EVENT = int(os.getenv("MAX_DEATHS_PER_EVENT", "50"))
 MAX_INJURIES_PER_EVENT = int(os.getenv("MAX_INJURIES_PER_EVENT", "200"))
 
-# Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
