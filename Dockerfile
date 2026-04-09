@@ -10,10 +10,9 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit
 
 COPY frontend/ ./
-COPY static/ /out/static/
 
 # Vite outputs to ../static/dist relative to frontend/
-RUN npm run build
+RUN mkdir -p /out/static && npm run build
 
 
 # ── Stage 2: Python runtime ───────────────────────────────────
