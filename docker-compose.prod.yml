@@ -14,7 +14,7 @@ services:
       - APP_ENV=production
       - LOG_LEVEL=WARNING
     ports:
-      - "80:8000"
+      - "8080:8000"   # Nginx proxies 80/443 → 8080 → container:8000
     volumes:
       # Persist the database on the host
       - prod-data:/app/data

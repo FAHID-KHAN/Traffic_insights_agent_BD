@@ -45,7 +45,7 @@
 
 The Traffic Insights Agent is a full-stack web application that:
 
-1. **Scrapes** road accident articles from [The Daily Star Bangladesh](https://www.thedailystar.net/tags/road-accident).
+1. **Scrapes** road accident articles from [New Age Bangladesh](https://www.newagebd.net/tags/Road%20accident).
 2. **Extracts** structured data (location, casualties, accident type, vehicles) from raw news article text using regex-based NLP.
 3. **Stores** everything in a local SQLite database.
 4. **Serves** an analytics dashboard via a React single-page application.
@@ -84,8 +84,8 @@ The Traffic Insights Agent is a full-stack web application that:
                              │ HTTPS (outbound)
                              ▼
                 ┌──────────────────────┐
-                │  The Daily Star      │
-                │  /tags/road-accident │
+                │  New Age Bangladesh  │
+                │  /tags/Road%20accident│
                 └──────────────────────┘
 ```
 
@@ -150,7 +150,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
 | `DATA_DIR` | `DATA_DIR` | `<root>/data/` | SQLite database location |
 | `STATIC_DIR` | — | `<root>/static/` | React production build |
 | `DB_PATH` | `DB_PATH` | `data/accidents.db` | Full database file path |
-| `DAILY_STAR_ACCIDENT_URL` | — | `thedailystar.net/tags/road-accident` | Scrape target |
+| `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/Road%20accident` | Scrape target |
 | `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `6` | Background scrape frequency |
 | `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `REQUEST_DELAY` | `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
@@ -393,7 +393,7 @@ Uses **APScheduler** `BackgroundScheduler` to run the scraper at a fixed interva
 | Setting | Value |
 |---------|-------|
 | Trigger | `IntervalTrigger(hours=6)` |
-| Job ID | `scrape_daily_star` |
+| Job ID | `scrape_new_age` |
 | Max instances | `1` (prevents overlap) |
 | `replace_existing` | `True` (safe restart) |
 
@@ -526,7 +526,7 @@ This is the end-to-end flow when data enters the system — either via the sched
          ├── Create single AccidentExtractor instance (reused for all articles)
          │
          ├── for page in 0..4:
-         │     fetch listing page from The Daily Star
+         │     fetch listing page from New Age Bangladesh
          │     parse <a> links with BeautifulSoup
          │     if all articles on page are duplicates → stop early
          │
@@ -602,7 +602,7 @@ Stores raw scraped article content. One row per news article URL.
 | `content` | TEXT | — | Full article body text |
 | `published_date` | DATE | — | Article publication date |
 | `scraped_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When we scraped it |
-| `source` | TEXT | DEFAULT 'The Daily Star' | News source name |
+| `source` | TEXT | DEFAULT 'New Age' | News source name |
 
 #### `accidents`
 

@@ -15,7 +15,7 @@ Planned validation layers to add to `app/llm/llm_extractor.py` before DB inserti
 
 ## Multi-Source Scraping
 
-- Add Daily Star, Dhaka Tribune, and Prothom Alo English as additional news sources
+- Add The Daily Star, Dhaka Tribune, and Prothom Alo English as additional news sources
 - Cross-validate incidents across sources for higher confidence
 - Dedup articles that cover the same accident from different outlets
 

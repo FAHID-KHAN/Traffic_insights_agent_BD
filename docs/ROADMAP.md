@@ -8,7 +8,7 @@
 ## Completed Features
 
 ### Phase 1 — Core Platform
-- [x] Web scraper targeting The Daily Star accident coverage
+- [x] Web scraper targeting New Age Bangladesh accident coverage
 - [x] NLP-based accident data extraction (casualties, location, vehicles, type)
 - [x] SQLite database with WAL mode for concurrent reads
 - [x] FastAPI REST API with 11 endpoints

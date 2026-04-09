@@ -9,3 +9,14 @@ node_modules/
 .github/
 *.md
 .env.*
+
+# Runtime data (seeded separately via SCP)
+data/
+backups/
+
+# Not needed in image
+tests/
+docs/
+*.log
+.DS_Store
+static/dist/

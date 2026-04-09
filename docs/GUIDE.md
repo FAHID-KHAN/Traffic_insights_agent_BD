@@ -48,7 +48,7 @@
 
 **Traffic Insight BD** is a full-stack single-page application that:
 
-1. **Scrapes** accident news from *The Daily Star* Bangladesh.
+1. **Scrapes** accident news from *New Age* Bangladesh.
 2. **Extracts** structured data (location, district, deaths, injuries, accident type) from raw article text using regex-based NLP.
 3. **Stores** everything in a local SQLite database.
 4. **Serves** a FastAPI JSON API consumed by a React SPA.
@@ -71,7 +71,7 @@ Traffic_insights_agent_BD/
 │   ├── rate_limit.py           # In-memory sliding-window rate limiter
 │   ├── routes.py               # All FastAPI endpoint definitions
 │   ├── scheduler.py            # APScheduler background scrape job
-│   ├── scraper.py              # The Daily Star HTTP scraper
+│   ├── scraper.py              # New Age Bangladesh HTTP scraper
 │   └── server.py               # FastAPI app factory + lifecycle
 │
 ├── frontend/                   # React 19 SPA (Vite)
@@ -683,7 +683,7 @@ CREATE TABLE articles (
     content        TEXT,
     published_date DATE,
     scraped_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    source         TEXT DEFAULT 'The Daily Star'
+    source         TEXT DEFAULT 'New Age'
 );
 
 -- Structured accident data extracted from articles
