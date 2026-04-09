@@ -6,6 +6,12 @@ export async function api(endpoint) {
   return res.json();
 }
 
+export async function postApi(endpoint) {
+  const res = await fetch(`${BASE}${endpoint}`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 export function formatDate(dateStr) {
   if (!dateStr) return '—';
   try {
