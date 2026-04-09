@@ -11,8 +11,8 @@ RUN npm ci --no-audit
 
 COPY frontend/ ./
 
-# Vite outputs to ../static/dist relative to frontend/
-RUN mkdir -p /out/static && npm run build
+# Vite outputs to ../static/dist relative to WORKDIR /build → /static/dist
+RUN npm run build
 
 
 # ── Stage 2: Python runtime ───────────────────────────────────
@@ -37,7 +37,7 @@ COPY app/ ./app/
 COPY run.py .
 
 # Copy built frontend from stage 1
-COPY --from=frontend-build /out/static/dist ./static/dist/
+COPY --from=frontend-build /static/dist ./static/dist/
 
 # Create data directory
 RUN mkdir -p /app/data
