@@ -5,6 +5,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+.env.production
 instructions.md:Zone.Identifier
 missing_published_dates.txt
 published_date_captured_links.txt
