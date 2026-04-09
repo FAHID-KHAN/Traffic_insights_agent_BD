@@ -66,14 +66,16 @@ class TestRateLimiting:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as c:
             with patch("app.routes.run_scraper", return_value={"total_found": 0, "total_new": 0}):
-                for _ in range(3):
-                    r = await c.post("/api/scrape")
-                    assert r.status_code == 200
+                headers = {"X-Admin-Key": "test-key"}
+                with patch("app.routes.ADMIN_API_KEY", "test-key"):
+                    for _ in range(3):
+                        r = await c.post("/api/scrape", headers=headers)
+                        assert r.status_code == 200
 
-                r = await c.post("/api/scrape")
-                assert r.status_code == 429
-                assert "Retry-After" in r.headers
-                assert "Rate limit" in r.json()["detail"]
+                    r = await c.post("/api/scrape", headers=headers)
+                    assert r.status_code == 429
+                    assert "Retry-After" in r.headers
+                    assert "Rate limit" in r.json()["detail"]
 
     def test_rate_limiter_unit(self):
         """Direct unit test of the RateLimiter without hitting any route."""
