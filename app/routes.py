@@ -2,22 +2,16 @@
 FastAPI route definitions.
 Separated from server setup for clarity.
 """
-import io
-import csv
-import json
 import logging
-import os
 import re
 import threading
 from datetime import date, datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException, Depends, Request
-from fastapi.responses import StreamingResponse
 
 import requests
 from app.rate_limit import scrape_limiter
 from app import database as db
-from app.config import STATIC_DIR
 from app.scraper import run_scraper, run_published_date_backfill
 from app.extractor import get_extraction_mode
 

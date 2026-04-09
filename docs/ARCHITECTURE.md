@@ -151,10 +151,10 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
 | `STATIC_DIR` | — | `<root>/static/` | React production build |
 | `DB_PATH` | `DB_PATH` | `data/accidents.db` | Full database file path |
 | `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/Road%20accident` | Scrape target |
-| `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `6` | Background scrape frequency |
+| `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `24` | Background scrape frequency (6 in prod) |
 | `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `REQUEST_DELAY` | `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
-| `MAX_PAGES_PER_SCRAPE` | `MAX_PAGES` | `5` | Pagination depth limit |
+| `MAX_PAGES_PER_SCRAPE` | `MAX_PAGES` | `3` | Pagination depth limit (5 in prod) |
 | `API_HOST` | `API_HOST` | `0.0.0.0` | Server bind address |
 | `API_PORT` | `API_PORT` | `8000` | Server port |
 | `CORS_ORIGINS` | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
@@ -291,12 +291,12 @@ This eliminates connection leaks that would occur if an exception were raised be
 
 **File:** `app/scraper.py`
 
-**Class:** `DailyStarScraper`
+**Class:** `NewAgeScraper`
 
 The scraper is a two-phase pipeline:
 
 **Phase 1 — Discover article links:**
-1. Fetches the tag page `thedailystar.net/tags/road-accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
+1. Fetches the tag page `newagebd.net/tags/Road%20accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
 2. Uses multiple CSS selectors to find `<a>` elements pointing to news articles.
 3. Deduplicates by URL within the current scrape.
 

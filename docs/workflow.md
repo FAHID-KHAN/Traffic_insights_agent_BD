@@ -27,7 +27,7 @@ This file documents the key implementation steps completed in this repository an
 ## 4) Published Date Capture Improvements
 
 - Updated `app/scraper.py` to parse published date directly from article HTML.
-- Added robust parsing for Daily Star formats (including malformed time strings like `18:03 PM`).
+- Added robust parsing for New Age formats (including malformed time strings like `18:03 PM`).
 - Added fallback metadata selectors for alternate templates.
 
 ## 5) Backfill and Sync
@@ -39,7 +39,7 @@ This file documents the key implementation steps completed in this repository an
 
 ## Current Runtime Flow
 
-1. Scraper fetches article links from Daily Star listing pages.
+1. Scraper fetches article links from New Age listing pages.
 2. For each new article, scraper captures title/content/published date.
 3. Article is inserted into `articles`.
 4. LLM extractor parses accidents in strict JSON.

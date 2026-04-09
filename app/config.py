@@ -56,21 +56,6 @@ BANGLADESH_DISTRICTS = [
     "Tejgaon", "Turag", "Gabtali", "Ashulia",
 ]
 
-ACCIDENT_TYPES = [
-    "bus accident", "bus crash", "truck accident", "truck crash",
-    "car accident", "car crash", "motorcycle accident", "bike accident",
-    "rickshaw accident", "auto-rickshaw accident", "cng accident",
-    "train accident", "train crash", "rail accident",
-    "boat accident", "boat capsize", "launch accident", "ferry accident",
-    "road accident", "road crash", "highway accident",
-    "hit-and-run", "hit and run",
-    "collision", "head-on collision", "rear-end collision",
-    "overturn", "overturned", "plunged", "fell off",
-    "pile-up", "pileup",
-    "pedestrian accident", "pedestrian hit",
-    "bridge collapse", "vehicle fire",
-]
-
 # ─── Server Settings ───────────────────────────────────────────
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))

@@ -50,7 +50,7 @@ export default function LiveNews({ limit = 12 }) {
             <li key={a.id} className="news-item">
               <div className="news-meta">
                 <span className="news-date">{formatDate(a.published_date)}</span>
-                <span className="news-source">{a.source || 'The Daily Star'}</span>
+                <span className="news-source">{a.source || 'New Age'}</span>
               </div>
               <a
                 href={a.url}

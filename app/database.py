@@ -3,15 +3,11 @@ Database models and operations for the Traffic Insights Agent.
 Uses SQLite for simplicity and portability.
 """
 import sqlite3
-import threading
 from contextlib import contextmanager
 from datetime import datetime, date
 from typing import Optional
 
 from app.config import DB_PATH, NEWS_SOURCE_NAME
-
-# Thread-local storage for connection reuse within the same thread
-_local = threading.local()
 
 
 def get_connection() -> sqlite3.Connection:
@@ -86,25 +82,6 @@ def init_db():
             status TEXT DEFAULT 'running'
         );
 
-        CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            incident_date TEXT NOT NULL,
-            incident_time TEXT,
-            location_text TEXT,
-            district TEXT,
-            division TEXT,
-            accident_type TEXT DEFAULT 'Road Accident',
-            fatalities INTEGER DEFAULT 0,
-            injuries INTEGER DEFAULT 0,
-            reporter_name TEXT DEFAULT 'Anonymous',
-            images TEXT DEFAULT '[]',
-            upvotes INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            status TEXT DEFAULT 'active'
-        );
-
         CREATE INDEX IF NOT EXISTS idx_accidents_date ON accidents(accident_date);
         CREATE INDEX IF NOT EXISTS idx_accidents_district ON accidents(district);
         CREATE INDEX IF NOT EXISTS idx_accidents_division ON accidents(division);
@@ -112,20 +89,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_accidents_article ON accidents(article_id);
         CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
         CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_date);
-        CREATE INDEX IF NOT EXISTS idx_reports_district ON reports(district);
-        CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(incident_date);
-        CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
-
-        CREATE TABLE IF NOT EXISTS report_comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_id INTEGER NOT NULL,
-            author_name TEXT NOT NULL DEFAULT 'Anonymous',
-            body TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_comments_report ON report_comments(report_id);
     """)
 
     # ── Schema migrations for existing databases ──
@@ -430,122 +393,3 @@ def get_scrape_logs(limit: int = 20):
             (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
-
-
-# ─── Community Reports ─────────────────────────────────────────
-
-def insert_report(
-    title: str,
-    description: str,
-    incident_date: str,
-    incident_time: Optional[str],
-    location_text: str,
-    district: Optional[str],
-    division: Optional[str],
-    accident_type: str,
-    fatalities: int,
-    injuries: int,
-    reporter_name: str,
-    images: list,
-) -> int:
-    """Insert a community-submitted incident report and return its ID."""
-    import json
-    with get_db() as conn:
-        cursor = conn.execute(
-            """INSERT INTO reports
-               (title, description, incident_date, incident_time, location_text,
-                district, division, accident_type, fatalities, injuries,
-                reporter_name, images)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                title, description, incident_date, incident_time, location_text,
-                district, division, accident_type, fatalities, injuries,
-                reporter_name, json.dumps(images),
-            ),
-        )
-        return cursor.lastrowid
-
-
-def get_reports(
-    limit: int = 20,
-    offset: int = 0,
-    district: Optional[str] = None,
-    division: Optional[str] = None,
-    accident_type: Optional[str] = None,
-) -> dict:
-    """Get community reports (newest first), with optional filters."""
-    conditions = ["status = 'active'"]
-    filter_params: list = []
-    if district:
-        conditions.append("district = ?")
-        filter_params.append(district)
-    if division:
-        conditions.append("division = ?")
-        filter_params.append(division)
-    if accident_type:
-        conditions.append("accident_type = ?")
-        filter_params.append(accident_type)
-    where = " AND ".join(conditions)
-
-    with get_db() as conn:
-        total = conn.execute(
-            f"SELECT COUNT(*) as c FROM reports WHERE {where}",
-            filter_params,
-        ).fetchone()["c"]
-        rows = conn.execute(
-            f"""SELECT * FROM reports WHERE {where}
-                ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-            filter_params + [limit, offset],
-        ).fetchall()
-    return {"items": [dict(r) for r in rows], "total": total}
-
-
-def get_report_by_id(report_id: int) -> Optional[dict]:
-    """Get a single community report by ID."""
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT * FROM reports WHERE id = ?", (report_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def upvote_report(report_id: int) -> int:
-    """Increment upvotes for a report and return new count."""
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE reports SET upvotes = upvotes + 1 WHERE id = ?", (report_id,)
-        )
-        row = conn.execute(
-            "SELECT upvotes FROM reports WHERE id = ?", (report_id,)
-        ).fetchone()
-        return row["upvotes"] if row else 0
-
-
-# ─── Report Comments ───────────────────────────────────────────
-
-def get_comments(report_id: int) -> list:
-    """Return all comments for a report, oldest first."""
-    with get_db() as conn:
-        rows = conn.execute(
-            """SELECT id, report_id, author_name, body, created_at
-               FROM report_comments
-               WHERE report_id = ?
-               ORDER BY created_at ASC""",
-            (report_id,),
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def insert_comment(report_id: int, author_name: str, body: str) -> dict:
-    """Insert a comment and return the newly created row."""
-    with get_db() as conn:
-        cursor = conn.execute(
-            """INSERT INTO report_comments (report_id, author_name, body)
-               VALUES (?, ?, ?)""",
-            (report_id, author_name or "Anonymous", body.strip()),
-        )
-        row = conn.execute(
-            "SELECT id, report_id, author_name, body, created_at FROM report_comments WHERE id = ?",
-            (cursor.lastrowid,),
-        ).fetchone()
-    return dict(row)

@@ -42,31 +42,3 @@ class AccidentExtractor:
         """Extract and insert accident events for an article."""
         inserted_ids = self._delegate.process_article(article_id, content, published_date)
         return inserted_ids[0] if inserted_ids else None
-
-
-def reprocess_all_articles() -> int:
-    """Re-process all existing articles using the active extractor."""
-    with db.get_db() as conn:
-        articles = conn.execute("SELECT id, content, published_date FROM articles").fetchall()
-
-    if _extraction_mode == "advanced":
-        extractor = LLMAccidentExtractor()
-    else:
-        extractor = RegexAccidentExtractor()
-
-    processed = 0
-
-    for article in articles:
-        pub_date = None
-        if article["published_date"]:
-            try:
-                pub_date = datetime.strptime(article["published_date"], "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                pub_date = None
-
-        inserted = extractor.process_article(article["id"], article["content"], pub_date)
-        if inserted:
-            processed += 1
-
-    logger.info("Reprocessed %s/%s articles (%s mode)", processed, len(articles), _extraction_mode)
-    return processed

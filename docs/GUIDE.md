@@ -240,8 +240,8 @@ All configuration lives in one file and reads from environment variables with se
 | `APP_ENV` | `development` | Switches between dev/prod behaviour |
 | `DB_PATH` | `data/accidents.db` | SQLite file location |
 | `STATIC_DIR` | `static/` | Where Vite build output lands |
-| `SCRAPE_INTERVAL_HOURS` | `6` | How often the scheduler runs |
-| `MAX_PAGES_PER_SCRAPE` | `5` | Safety cap on scraper pagination |
+| `SCRAPE_INTERVAL_HOURS` | `24` | How often the scheduler runs (6 in prod) |
+| `MAX_PAGES_PER_SCRAPE` | `3` | Safety cap on scraper pagination (5 in prod) |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `BANGLADESH_DISTRICTS` | list (75 entries) | Used by the NLP extractor |
 | `BANGLADESH_DIVISIONS` | list (10 entries) | Used by the NLP extractor |
@@ -291,9 +291,9 @@ Every route handler wraps its queries in `with db.get_db() as conn:`. This ensur
 
 ### 4.5 Scraper — `app/scraper.py`
 
-`DailyStarScraper` uses a `requests.Session` to:
+The scraper uses a `requests.Session` to:
 
-1. **Paginate** `thedailystar.net/tags/road-accident` (up to `MAX_PAGES_PER_SCRAPE`).
+1. **Paginate** `newagebd.net/tags/Road%20accident` (up to `MAX_PAGES_PER_SCRAPE`).
 2. For each article link found, **check** if the URL already exists in `articles` (deduplication via `UNIQUE` constraint).
 3. **Fetch and parse** new articles using BeautifulSoup.
 4. **Extract** date, title, content and call `insert_article()`.
@@ -380,7 +380,7 @@ All prefixed `/api` via `router = APIRouter(prefix="/api")`.
 
 `APScheduler.BackgroundScheduler` runs inside the same Python process.
 
-- Fires `_scheduled_scrape()` every `SCRAPE_INTERVAL_HOURS` hours (default: 6).
+- Fires `_scheduled_scrape()` every `SCRAPE_INTERVAL_HOURS` hours (default: 24, 6 in prod).
 - `max_instances=1` prevents overlapping runs if a scrape takes longer than the interval.
 - Started in the `lifespan` startup hook, shut down in the lifespan cleanup.
 
@@ -560,13 +560,13 @@ One 4100-line stylesheet — no CSS modules, no Tailwind. Reasons:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Background Scheduler                        │
-│  APScheduler fires every 6 hours                                │
+│  APScheduler fires every SCRAPE_INTERVAL_HOURS                 │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ calls
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DailyStarScraper                             │
-│  1. GET thedailystar.net/tags/road-accident (paginated)         │
+│                    NewAgeScraper                                │
+│  1. GET newagebd.net/tags/Road%20accident (paginated)           │
 │  2. Parse article list with BeautifulSoup                       │
 │  3. For each new URL: fetch full article page                   │
 │  4. Extract title, content, published_date                      │

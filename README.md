@@ -139,13 +139,19 @@ Traffic_insights_agent_BD/
 ├── .env.production             # Prod environment variables
 ├── .dockerignore               # Docker build exclusions
 ├── .github/
-│   ├── workflows/ci.yml        # CI pipeline (parallel lint + test)
-│   └── pull_request_template.md
+│   └── workflows/
+│       ├── ci.yml              # CI pipeline (parallel lint + test)
+│       └── deploy.yml          # CD pipeline (auto-deploy on main)
 ├── docs/                       # Project documentation
 │   ├── ARCHITECTURE.md         # Detailed architecture documentation
 │   ├── CONTRIBUTING.md         # Branch & PR rules
 │   ├── DEPLOYMENT_PLAN.md      # Deployment strategy
-│   └── ROADMAP.md              # Project roadmap & milestones
+│   ├── FUTURE_FEATURES.md     # Planned feature ideas
+│   ├── GUIDE.md                # Comprehensive developer guide
+│   ├── ROADMAP.md              # Project roadmap & milestones
+│   ├── edge_cases.md           # Known edge cases & handling
+│   ├── instructions.md         # Implementation status notes
+│   └── workflow.md             # Implementation history
 └── .gitignore
 ```
 
@@ -561,8 +567,8 @@ All settings in `app/config.py` can be overridden via environment variables:
 | `LOG_LEVEL` | `DEBUG` (dev) / `WARNING` (prod) | Python logging level |
 | `DATA_DIR` | `data/` | Directory for SQLite database |
 | `DB_PATH` | `data/accidents.db` | Database file path |
-| `SCRAPE_INTERVAL_HOURS` | `6` | Scraping frequency |
-| `MAX_PAGES` | `5` | Pages to scrape per cycle |
+| `SCRAPE_INTERVAL_HOURS` | `24` | Scraping frequency (6 in prod) |
+| `MAX_PAGES` | `3` | Pages to scrape per cycle (5 in prod) |
 | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `REQUEST_DELAY` | `2` | Politeness delay between requests |
 | `API_HOST` | `0.0.0.0` | Server bind address |

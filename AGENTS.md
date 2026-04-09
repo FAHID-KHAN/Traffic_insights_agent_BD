@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - `run.py`: local entry point (`uvicorn` app loader).
 - `app/`: backend code.
-- `app/scraper.py`: Daily Star scraping pipeline.
+- `app/scraper.py`: New Age Bangladesh scraping pipeline.
 - `app/llm/`: OpenAI integration (`openai_client.py`, `llm_schema.py`, `llm_extractor.py`).
 - `app/database.py`: SQLite schema and query helpers.
 - `app/routes.py`: FastAPI API endpoints.
