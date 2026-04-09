@@ -20,6 +20,7 @@ export default function DistrictDetail() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selected) { setData(null); return; }
     setLoading(true);
     api(`/district/${encodeURIComponent(selected)}`)
