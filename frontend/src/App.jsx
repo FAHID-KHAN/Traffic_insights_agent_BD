@@ -14,7 +14,10 @@ const Zones      = lazy(() => import('./pages/Zones'));
 const Records    = lazy(() => import('./pages/Records'));
 const Compare    = lazy(() => import('./pages/Compare'));
 const SearchPage     = lazy(() => import('./pages/SearchPage'));
-const CommunityFeed  = lazy(() => import('./pages/CommunityFeed'));
+const Insights       = lazy(() => import('./pages/Insights'));
+const News           = lazy(() => import('./pages/News'));
+const Privacy        = lazy(() => import('./pages/Privacy'));
+const Terms          = lazy(() => import('./pages/Terms'));
 const NotFound       = lazy(() => import('./pages/NotFound'));
 
 /* ── Inline fallback shown while a lazy chunk loads ─────────── */
@@ -48,9 +51,12 @@ export default function App() {
                 <Route path="map" element={<DangerMap />} />
                 <Route path="zones" element={<Zones />} />
                 <Route path="compare" element={<Compare />} />
+                <Route path="insights" element={<Insights />} />
                 <Route path="search" element={<SearchPage />} />
+                <Route path="news" element={<News />} />
                 <Route path="records" element={<Records />} />
-                <Route path="community" element={<CommunityFeed />} />
+                <Route path="privacy" element={<Privacy />} />
+                <Route path="terms" element={<Terms />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>

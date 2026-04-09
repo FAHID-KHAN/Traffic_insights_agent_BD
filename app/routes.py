@@ -8,12 +8,10 @@ import json
 import logging
 import os
 import re
-import shutil
 import threading
-import uuid
 from datetime import date, datetime
-from typing import List, Optional
-from fastapi import APIRouter, File, Form, Query, HTTPException, Depends, Request, UploadFile
+from typing import Optional
+from fastapi import APIRouter, Query, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 
 import requests
@@ -26,10 +24,6 @@ from app.extractor import get_extraction_mode
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
-
-# Directory where uploaded report images are stored
-UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads", "reports")
-os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 # ─── Overview ───────────────────────────────────────────────────
@@ -152,6 +146,50 @@ async def get_recent(limit: int = Query(50, ge=1, le=200)):
     return db.get_recent_accidents(limit)
 
 
+@router.get("/records")
+async def get_records(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    q: Optional[str] = Query(None, min_length=2),
+):
+    """Paginated accident records with optional search, returns total count."""
+    with db.get_db() as conn:
+        if q:
+            like = f"%{q}%"
+            count = conn.execute(
+                """SELECT COUNT(*) as c FROM accidents a
+                   JOIN articles ar ON a.article_id = ar.id
+                   WHERE a.district LIKE ? OR a.location_raw LIKE ?
+                         OR a.accident_type LIKE ? OR a.summary LIKE ?
+                         OR ar.title LIKE ?""",
+                (like, like, like, like, like),
+            ).fetchone()["c"]
+            rows = conn.execute(
+                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                   FROM accidents a
+                   JOIN articles ar ON a.article_id = ar.id
+                   WHERE a.district LIKE ? OR a.location_raw LIKE ?
+                         OR a.accident_type LIKE ? OR a.summary LIKE ?
+                         OR ar.title LIKE ?
+                   ORDER BY a.accident_date DESC, a.id DESC
+                   LIMIT ? OFFSET ?""",
+                (like, like, like, like, like, limit, offset),
+            ).fetchall()
+        else:
+            count = conn.execute(
+                "SELECT COUNT(*) as c FROM accidents"
+            ).fetchone()["c"]
+            rows = conn.execute(
+                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                   FROM accidents a
+                   JOIN articles ar ON a.article_id = ar.id
+                   ORDER BY a.accident_date DESC, a.id DESC
+                   LIMIT ? OFFSET ?""",
+                (limit, offset),
+            ).fetchall()
+        return {"total": count, "offset": offset, "limit": limit, "records": [dict(r) for r in rows]}
+
+
 @router.get("/map-data")
 async def get_map_data():
     return db.get_all_accidents_for_map()
@@ -257,12 +295,17 @@ async def get_youtube_videos(
         try:
             resp = requests.get(
                 "https://www.youtube.com/results",
-                params={"search_query": query},
+                params={"search_query": query, "sp": "EgIQAQ%3D%3D"},
                 headers=headers,
                 timeout=10,
             )
             if resp.status_code != 200:
                 continue
+
+            # Collect shorts IDs to exclude
+            shorts_ids = set(re.findall(
+                r'/shorts/([a-zA-Z0-9_-]{11})', resp.text
+            ))
 
             vid_matches = re.findall(
                 r'"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"', resp.text
@@ -273,7 +316,7 @@ async def get_youtube_videos(
             )
 
             for i, vid in enumerate(vid_matches):
-                if vid in seen_ids:
+                if vid in seen_ids or vid in shorts_ids:
                     continue
                 seen_ids.add(vid)
                 title = title_matches[i] if i < len(title_matches) else "Bangladesh Road Accident News"
@@ -391,6 +434,12 @@ async def compare_yearly(
 
 # ─── Division-level Stats ──────────────────────────────────────
 
+_DIVISION_CANONICAL = {
+    "Chattogram": "Chittagong",
+    "Barishal": "Barisal",
+}
+
+
 @router.get("/divisions")
 async def get_division_stats():
     """Aggregated stats per division with district breakdown."""
@@ -405,21 +454,44 @@ async def get_division_stats():
                GROUP BY division
                ORDER BY total_accidents DESC"""
         ).fetchall()
-        result = []
+
+        # Merge alternate division spellings
+        merged: dict = {}
         for d in divs:
+            canonical = _DIVISION_CANONICAL.get(d["division"], d["division"])
+            if canonical in merged:
+                m = merged[canonical]
+                m["total_accidents"] += d["total_accidents"]
+                m["total_deaths"] += d["total_deaths"]
+                m["total_injuries"] += d["total_injuries"]
+            else:
+                merged[canonical] = {
+                    "division": canonical,
+                    "total_accidents": d["total_accidents"],
+                    "total_deaths": d["total_deaths"],
+                    "total_injuries": d["total_injuries"],
+                    "avg_lat": d["avg_lat"],
+                    "avg_lon": d["avg_lon"],
+                }
+
+        result = []
+        for name, m in sorted(merged.items(), key=lambda x: -x[1]["total_accidents"]):
+            # Collect districts from both canonical and alternate names
+            alt_names = [name] + [k for k, v in _DIVISION_CANONICAL.items() if v == name]
+            placeholders = ",".join("?" * len(alt_names))
             districts = conn.execute(
-                """SELECT district, COUNT(*) as accidents,
-                          COALESCE(SUM(deaths), 0) as deaths,
-                          COALESCE(SUM(injuries), 0) as injuries
-                   FROM accidents
-                   WHERE division = ? AND district IS NOT NULL
-                   GROUP BY district ORDER BY accidents DESC""",
-                (d["division"],),
+                f"""SELECT district, COUNT(*) as accidents,
+                           COALESCE(SUM(deaths), 0) as deaths,
+                           COALESCE(SUM(injuries), 0) as injuries
+                    FROM accidents
+                    WHERE division IN ({placeholders}) AND district IS NOT NULL
+                    GROUP BY district ORDER BY accidents DESC""",
+                alt_names,
             ).fetchall()
-            acc = d["total_accidents"]
-            deaths = d["total_deaths"]
+            acc = m["total_accidents"]
+            deaths = m["total_deaths"]
             result.append({
-                **dict(d),
+                **m,
                 "fatality_rate": round(deaths / acc, 2) if acc > 0 else 0,
                 "districts": [dict(r) for r in districts],
             })
@@ -464,6 +536,45 @@ async def get_danger_index(
             d["severity"] = "low"
         result.append(d)
     return result
+
+
+@router.get("/danger-zones/summary")
+async def get_danger_zones_summary():
+    """Aggregate summary stats for the danger zones page."""
+    with db.get_db() as conn:
+        totals = conn.execute(
+            """SELECT COUNT(DISTINCT district) as total_districts,
+                      COUNT(*) as total_accidents,
+                      COALESCE(SUM(deaths), 0) as total_deaths,
+                      COALESCE(SUM(injuries), 0) as total_injuries
+               FROM accidents WHERE district IS NOT NULL"""
+        ).fetchone()
+
+        divisions = conn.execute(
+            """SELECT division, COUNT(DISTINCT district) as districts,
+                      COUNT(*) as total_accidents,
+                      COALESCE(SUM(deaths), 0) as total_deaths,
+                      COALESCE(SUM(injuries), 0) as total_injuries,
+                      ROUND(CAST(COALESCE(SUM(deaths), 0) AS REAL) / COUNT(*), 2) as fatality_rate
+               FROM accidents
+               WHERE division IS NOT NULL
+               GROUP BY division
+               ORDER BY total_accidents DESC"""
+        ).fetchall()
+
+        worst_districts = conn.execute(
+            """SELECT district, division, COUNT(*) as total_accidents,
+                      COALESCE(SUM(deaths), 0) as total_deaths
+               FROM accidents WHERE district IS NOT NULL
+               GROUP BY district
+               ORDER BY total_deaths DESC LIMIT 5"""
+        ).fetchall()
+
+    return {
+        "totals": dict(totals),
+        "divisions": [dict(r) for r in divisions],
+        "worst_districts": [dict(r) for r in worst_districts],
+    }
 
 
 @router.get("/search")
@@ -522,6 +633,28 @@ async def get_trend(
                    ORDER BY accident_date"""
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ─── Search Filter Options ──────────────────────────────────────
+
+@router.get("/search/districts")
+async def get_distinct_districts():
+    """Return all distinct district names from the accidents table."""
+    with db.get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT district FROM accidents WHERE district IS NOT NULL ORDER BY district"
+        ).fetchall()
+        return [r["district"] for r in rows]
+
+
+@router.get("/search/types")
+async def get_distinct_types():
+    """Return all distinct accident types from the accidents table."""
+    with db.get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT accident_type FROM accidents WHERE accident_type IS NOT NULL ORDER BY accident_type"
+        ).fetchall()
+        return [r["accident_type"] for r in rows]
 
 
 # ─── Advanced Search ────────────────────────────────────────────
@@ -991,133 +1124,291 @@ async def export_csv(
     )
 
 
-# ─── Community Reports ─────────────────────────────────────────
+# ─── District Detail ────────────────────────────────────────────
 
-@router.get("/reports")
-async def get_reports(
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    district: Optional[str] = Query(None),
-    division: Optional[str] = Query(None),
-    accident_type: Optional[str] = Query(None),
+@router.get("/district/{district_name}")
+async def get_district_detail(district_name: str):
+    """Full analytics for a single district: trend, types, vehicles, severity over time."""
+    with db.get_db() as conn:
+        # Basic totals
+        totals = conn.execute(
+            """SELECT COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries,
+                      MIN(accident_date) as first_date,
+                      MAX(accident_date) as last_date
+               FROM accidents WHERE district = ?""",
+            (district_name,),
+        ).fetchone()
+
+        if not totals or totals["accidents"] == 0:
+            raise HTTPException(status_code=404, detail="District not found")
+
+        # Monthly trend
+        trend = conn.execute(
+            """SELECT strftime('%Y-%m', accident_date) as month,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE district = ? AND accident_date IS NOT NULL
+               GROUP BY month ORDER BY month""",
+            (district_name,),
+        ).fetchall()
+
+        # By accident type
+        by_type = conn.execute(
+            """SELECT accident_type, COUNT(*) as count,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents WHERE district = ? AND accident_type IS NOT NULL
+               GROUP BY accident_type ORDER BY count DESC""",
+            (district_name,),
+        ).fetchall()
+
+        # By vehicle
+        vehicles_raw = conn.execute(
+            "SELECT vehicles_involved FROM accidents WHERE district = ? AND vehicles_involved IS NOT NULL",
+            (district_name,),
+        ).fetchall()
+        vehicle_counts: dict = {}
+        for row in vehicles_raw:
+            for v in row["vehicles_involved"].split(","):
+                v = v.strip().lower()
+                if v:
+                    vehicle_counts[v] = vehicle_counts.get(v, 0) + 1
+        top_vehicles = sorted(vehicle_counts.items(), key=lambda x: -x[1])[:15]
+
+        # Day-of-week pattern
+        dow = conn.execute(
+            """SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths
+               FROM accidents
+               WHERE district = ? AND accident_date IS NOT NULL
+               GROUP BY dow ORDER BY dow""",
+            (district_name,),
+        ).fetchall()
+
+        # Fatality rate over time (monthly)
+        fatality_trend = []
+        for m in trend:
+            fr = round(m["deaths"] / m["accidents"], 2) if m["accidents"] > 0 else 0
+            fatality_trend.append({"month": m["month"], "fatality_rate": fr})
+
+        # Recent accidents
+        recent = conn.execute(
+            """SELECT a.id, a.accident_date, a.accident_type, a.deaths, a.injuries,
+                      a.location_raw, a.summary, ar.title as article_title, ar.url as article_url
+               FROM accidents a
+               LEFT JOIN articles ar ON a.article_id = ar.id
+               WHERE a.district = ?
+               ORDER BY a.accident_date DESC LIMIT 10""",
+            (district_name,),
+        ).fetchall()
+
+        division = conn.execute(
+            "SELECT division FROM accidents WHERE district = ? AND division IS NOT NULL LIMIT 1",
+            (district_name,),
+        ).fetchone()
+
+    acc = totals["accidents"]
+    return {
+        "district": district_name,
+        "division": division["division"] if division else None,
+        "totals": dict(totals),
+        "fatality_rate": round(totals["deaths"] / acc, 2) if acc else 0,
+        "trend": [dict(r) for r in trend],
+        "fatality_trend": fatality_trend,
+        "by_type": [dict(r) for r in by_type],
+        "top_vehicles": [{"vehicle": v, "count": c} for v, c in top_vehicles],
+        "by_dow": [dict(r) for r in dow],
+        "recent": [dict(r) for r in recent],
+    }
+
+
+# ─── Road / Highway Analysis ───────────────────────────────────
+
+@router.get("/roads")
+async def get_road_analysis(
+    limit: int = Query(30, ge=1, le=100),
 ):
-    """Get community-submitted incident reports, newest first."""
-    return db.get_reports(
-        limit=limit,
-        offset=offset,
-        district=district or None,
-        division=division or None,
-        accident_type=accident_type or None,
-    )
+    """Dangerous roads/highways ranked by accident count and fatality rate."""
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT road_name, COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries,
+                      COUNT(DISTINCT district) as districts_affected,
+                      ROUND(CAST(COALESCE(SUM(deaths), 0) AS REAL) / COUNT(*), 2) as fatality_rate,
+                      GROUP_CONCAT(DISTINCT district) as district_list
+               FROM accidents
+               WHERE road_name IS NOT NULL AND road_name != ''
+               GROUP BY road_name
+               HAVING COUNT(*) >= 1
+               ORDER BY accidents DESC, deaths DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            d = dict(r)
+            fr = d["fatality_rate"]
+            if fr >= 1.5:
+                d["severity"] = "critical"
+            elif fr >= 1.0:
+                d["severity"] = "high"
+            elif fr >= 0.5:
+                d["severity"] = "moderate"
+            else:
+                d["severity"] = "low"
+            d["district_list"] = d["district_list"].split(",") if d["district_list"] else []
+            result.append(d)
+        return result
 
 
-@router.get("/reports/{report_id}")
-async def get_report(report_id: int):
-    """Get a single community report by ID."""
-    report = db.get_report_by_id(report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return report
+# ─── Geographic Blackspot Detection (DBSCAN) ───────────────────
 
-
-@router.post("/reports/{report_id}/upvote")
-async def upvote_report(report_id: int):
-    """Upvote a community report."""
-    report = db.get_report_by_id(report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    new_count = db.upvote_report(report_id)
-    return {"upvotes": new_count}
-
-
-@router.get("/reports/{report_id}/comments")
-async def get_report_comments(report_id: int):
-    """Return all comments for a report (oldest first)."""
-    report = db.get_report_by_id(report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    comments = db.get_comments(report_id)
-    return {"items": comments, "total": len(comments)}
-
-
-@router.post("/reports/{report_id}/comments", status_code=201)
-async def add_report_comment(
-    report_id: int,
-    author_name: str = Form("Anonymous", max_length=80),
-    body: str = Form(..., min_length=1, max_length=1000),
+@router.get("/blackspots")
+async def get_blackspots(
+    eps_km: float = Query(5.0, ge=0.5, le=50, description="Cluster radius in km"),
+    min_samples: int = Query(3, ge=2, le=20, description="Min accidents per cluster"),
 ):
-    """Post a comment on a community report."""
-    report = db.get_report_by_id(report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    if not body.strip():
-        raise HTTPException(status_code=422, detail="Comment body cannot be empty")
-    comment = db.insert_comment(
-        report_id=report_id,
-        author_name=(author_name or "Anonymous").strip(),
-        body=body,
-    )
-    return comment
-
-
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_IMAGE_SIZE = 8 * 1024 * 1024   # 8 MB per file
-MAX_IMAGES = 5
-
-
-@router.post("/reports", status_code=201)
-async def submit_report(
-    title: str = Form(..., min_length=5, max_length=200),
-    description: str = Form(""),
-    incident_date: str = Form(...),
-    incident_time: str = Form(""),
-    location_text: str = Form(""),
-    district: str = Form(""),
-    division: str = Form(""),
-    accident_type: str = Form("Road Accident"),
-    fatalities: int = Form(0, ge=0),
-    injuries: int = Form(0, ge=0),
-    reporter_name: str = Form("Anonymous", max_length=80),
-    images: List[UploadFile] = File(default=[]),
-):
-    """Submit a new community incident report with optional image uploads."""
-    # Validate date
+    """Identify geographic accident blackspots using DBSCAN spatial clustering."""
+    import numpy as np
     try:
-        datetime.strptime(incident_date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(status_code=422, detail="incident_date must be YYYY-MM-DD")
+        from sklearn.cluster import DBSCAN
+    except ImportError:
+        raise HTTPException(status_code=501, detail="scikit-learn not installed")
 
-    # Validate and save images
-    saved_paths: list[str] = []
-    if images:
-        for img in images[:MAX_IMAGES]:
-            if img.content_type not in ALLOWED_IMAGE_TYPES:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Unsupported image type: {img.content_type}. Use JPEG, PNG, WebP or GIF.",
-                )
-            data = await img.read()
-            if len(data) > MAX_IMAGE_SIZE:
-                raise HTTPException(status_code=422, detail=f"Image '{img.filename}' exceeds 8 MB limit.")
-            ext = img.filename.rsplit(".", 1)[-1].lower() if img.filename and "." in img.filename else "jpg"
-            filename = f"{uuid.uuid4().hex}.{ext}"
-            dest = os.path.join(UPLOADS_DIR, filename)
-            with open(dest, "wb") as f:
-                f.write(data)
-            saved_paths.append(f"/uploads/reports/{filename}")
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, latitude, longitude, deaths, injuries, district,
+                      accident_type, accident_date, location_raw
+               FROM accidents
+               WHERE latitude IS NOT NULL AND longitude IS NOT NULL"""
+        ).fetchall()
 
-    report_id = db.insert_report(
-        title=title,
-        description=description,
-        incident_date=incident_date,
-        incident_time=incident_time or None,
-        location_text=location_text,
-        district=district or None,
-        division=division or None,
-        accident_type=accident_type,
-        fatalities=fatalities,
-        injuries=injuries,
-        reporter_name=reporter_name or "Anonymous",
-        images=saved_paths,
-    )
-    return {"id": report_id, "images": saved_paths}
+    if len(rows) < min_samples:
+        return []
+
+    coords = np.array([[r["latitude"], r["longitude"]] for r in rows])
+    # Convert km radius to approximate radians for haversine
+    eps_rad = eps_km / 6371.0
+
+    db_scan = DBSCAN(eps=eps_rad, min_samples=min_samples, metric="haversine")
+    labels = db_scan.fit_predict(np.radians(coords))
+
+    # Group accidents by cluster label (ignore noise label -1)
+    from collections import defaultdict
+    cluster_map = defaultdict(list)
+    for i, label in enumerate(labels):
+        if label >= 0:
+            cluster_map[int(label)].append(dict(rows[i]))
+
+    blackspots = []
+    for cid, accidents in cluster_map.items():
+        lats = [a["latitude"] for a in accidents]
+        lons = [a["longitude"] for a in accidents]
+        total_deaths = sum(a.get("deaths", 0) or 0 for a in accidents)
+        total_injuries = sum(a.get("injuries", 0) or 0 for a in accidents)
+        districts = list({a["district"] for a in accidents if a["district"]})
+
+        severity = (
+            "critical" if total_deaths >= 10
+            else "high" if total_deaths >= 5
+            else "moderate" if total_deaths >= 2
+            else "low"
+        )
+
+        blackspots.append({
+            "cluster_id": cid,
+            "center_lat": round(sum(lats) / len(lats), 6),
+            "center_lon": round(sum(lons) / len(lons), 6),
+            "radius_km": eps_km,
+            "accident_count": len(accidents),
+            "total_deaths": total_deaths,
+            "total_injuries": total_injuries,
+            "districts": districts,
+            "severity": severity,
+            "accidents": accidents,
+        })
+
+    blackspots.sort(key=lambda b: (-b["total_deaths"], -b["accident_count"]))
+    return blackspots
+
+
+# ─── Vehicle Type Analytics ─────────────────────────────────────
+
+@router.get("/vehicle-analytics")
+async def get_vehicle_analytics():
+    """Deep dive into accident statistics by vehicle type."""
+    with db.get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, vehicles_involved, deaths, injuries, accident_type,
+                      accident_date, district
+               FROM accidents
+               WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''"""
+        ).fetchall()
+
+    from collections import defaultdict, Counter
+
+    vehicle_stats: dict = defaultdict(lambda: {
+        "count": 0, "deaths": 0, "injuries": 0, "by_month": defaultdict(int), "districts": Counter()
+    })
+
+    for r in rows:
+        for v in r["vehicles_involved"].split(","):
+            v = v.strip()
+            if not v:
+                continue
+            # Normalize common vehicle names
+            vl = v.lower()
+            if "bus" in vl:
+                key = "Bus"
+            elif "truck" in vl or "lorry" in vl:
+                key = "Truck"
+            elif "motorcycle" in vl or "motorbike" in vl or "bike" in vl:
+                key = "Motorcycle"
+            elif "cng" in vl or "auto" in vl or "autorickshaw" in vl or "three-wheeler" in vl:
+                key = "CNG/Auto-rickshaw"
+            elif "car" in vl or "microbus" in vl or "jeep" in vl or "suv" in vl:
+                key = "Car/Microbus"
+            elif "van" in vl or "pickup" in vl:
+                key = "Van/Pickup"
+            elif "rickshaw" in vl:
+                key = "Rickshaw"
+            elif "train" in vl:
+                key = "Train"
+            elif "boat" in vl or "launch" in vl or "vessel" in vl or "trawler" in vl:
+                key = "Watercraft"
+            else:
+                key = v.title()
+
+            stats = vehicle_stats[key]
+            stats["count"] += 1
+            stats["deaths"] += r["deaths"] or 0
+            stats["injuries"] += r["injuries"] or 0
+            if r["accident_date"]:
+                month = r["accident_date"][:7]
+                stats["by_month"][month] += 1
+            if r["district"]:
+                stats["districts"][r["district"]] += 1
+
+    result = []
+    for vehicle, stats in sorted(vehicle_stats.items(), key=lambda x: -x[1]["count"]):
+        acc = stats["count"]
+        result.append({
+            "vehicle": vehicle,
+            "accidents": acc,
+            "deaths": stats["deaths"],
+            "injuries": stats["injuries"],
+            "fatality_rate": round(stats["deaths"] / acc, 2) if acc else 0,
+            "trend": [{"month": m, "count": c}
+                      for m, c in sorted(stats["by_month"].items())],
+            "top_districts": [{"district": d, "count": c}
+                              for d, c in stats["districts"].most_common(5)],
+        })
+
+    return result

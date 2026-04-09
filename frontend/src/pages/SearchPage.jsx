@@ -6,12 +6,6 @@ import {
   FaDownload, FaMapMarkerAlt,
 } from 'react-icons/fa';
 
-const TYPES = [
-  '', 'Bus accident', 'Truck accident', 'Motorcycle accident',
-  'Auto-rickshaw accident', 'Train accident', 'Pedestrian accident',
-  'Multi-vehicle collision', 'Road accident',
-];
-
 const SEVERITY_OPTIONS = [
   { label: 'Any', value: '' },
   { label: 'Fatal (1+ deaths)', value: 'fatal' },
@@ -32,14 +26,15 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [districts, setDistricts] = useState([]);
+  const [types, setTypes] = useState([]);
 
-  // Load district list
+  // Load district and type lists from DB
   useEffect(() => {
-    api('/danger-zones?limit=100')
-      .then((data) => {
-        const dList = [...new Set(data.map((d) => d.district).filter(Boolean))].sort();
-        setDistricts(dList);
-      })
+    api('/search/districts')
+      .then(setDistricts)
+      .catch(() => {});
+    api('/search/types')
+      .then(setTypes)
       .catch(() => {});
   }, []);
 
@@ -139,7 +134,7 @@ export default function SearchPage() {
             <label><FaCarCrash /> Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">All types</option>
-              {TYPES.filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
+              {types.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 

@@ -39,9 +39,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "default-src 'self'; "
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https://*.tile.openstreetmap.org https://img.youtube.com; "
+            "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://img.youtube.com; "
             "font-src 'self'; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; "
             "frame-src https://www.youtube.com; "
             "object-src 'none'; "
             "base-uri 'self'"
@@ -113,9 +113,15 @@ def create_app() -> FastAPI:
     os.makedirs(uploads_dir, exist_ok=True)
     application.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-    # SPA catch-all: serve React index.html for all non-API routes
+    # SPA catch-all: serve static files or React index.html for all non-API routes
     @application.get("/{path:path}")
     async def serve_react_spa(path: str = ""):
+        # First, try to serve the exact file from the build directory
+        if path:
+            file_path = os.path.join(REACT_DIST, path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+        # Fall back to index.html for SPA client-side routing
         index_path = os.path.join(REACT_DIST, "index.html")
         if os.path.isfile(index_path):
             return FileResponse(index_path)

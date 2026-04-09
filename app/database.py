@@ -70,6 +70,7 @@ def init_db():
             deaths INTEGER DEFAULT 0,
             injuries INTEGER DEFAULT 0,
             vehicles_involved TEXT,
+            road_name TEXT,
             accident_date DATE,
             summary TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -127,8 +128,19 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_comments_report ON report_comments(report_id);
     """)
 
+    # ── Schema migrations for existing databases ──
+    _migrate_add_column(cursor, "accidents", "road_name", "TEXT")
+
     conn.commit()
     conn.close()
+
+
+def _migrate_add_column(cursor, table: str, column: str, col_type: str):
+    """Add a column to a table if it doesn't already exist."""
+    try:
+        cursor.execute(f"SELECT {column} FROM {table} LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
 
 # ─── Article Operations ────────────────────────────────────────
@@ -210,6 +222,7 @@ def insert_accident(article_id: int, accident_type: str = None,
                     division: str = None, latitude: float = None,
                     longitude: float = None, deaths: int = 0,
                     injuries: int = 0, vehicles_involved: str = None,
+                    road_name: str = None,
                     accident_date: date = None, summary: str = None) -> int:
     """Insert an accident record and return its ID."""
     with get_db() as conn:
@@ -217,11 +230,11 @@ def insert_accident(article_id: int, accident_type: str = None,
             """INSERT INTO accidents
                (article_id, accident_type, location_raw, district, division,
                 latitude, longitude, deaths, injuries, vehicles_involved,
-                accident_date, summary)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                road_name, accident_date, summary)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (article_id, accident_type, location_raw, district, division,
              latitude, longitude, deaths, injuries, vehicles_involved,
-             accident_date, summary)
+             road_name, accident_date, summary)
         )
         return cursor.lastrowid
 

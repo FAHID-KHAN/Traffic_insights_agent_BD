@@ -7,7 +7,7 @@ ChartJS.register(...registerables);
 // Set global defaults
 ChartJS.defaults.color = '#94a3b8';
 ChartJS.defaults.borderColor = 'rgba(51, 65, 85, 0.5)';
-ChartJS.defaults.font.family = 'Inter';
+ChartJS.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 export default function ChartCard({ title, icon, type, data, options, fullWidth }) {
   const chartRef = useRef(null);

@@ -1,7 +1,7 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaSyncAlt, FaSpinner, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaDownload, FaUsers } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaLinkedin, FaChartArea, FaNewspaper } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
-import { api, postApi } from '../utils/api';
+import { api } from '../utils/api';
 import ToastContainer from './ToastContainer';
 import AlertBanner from './AlertBanner';
 import { useToast } from '../utils/useToast';
@@ -15,13 +15,13 @@ const tabs = [
   { to: '/map', icon: <FaMapMarkedAlt />, label: 'Danger Map' },
   { to: '/zones', icon: <FaExclamationTriangle />, label: 'Danger Zones' },
   { to: '/compare', icon: <FaBalanceScale />, label: 'Compare' },
+  { to: '/insights', icon: <FaChartArea />, label: 'Insights' },
   { to: '/search', icon: <FaSearch />, label: 'Search' },
+  { to: '/news', icon: <FaNewspaper />, label: 'News' },
   { to: '/records', icon: <FaList />, label: 'Records' },
-  { to: '/community', icon: <FaUsers />, label: 'Community' },
 ];
 
 export default function Layout() {
-  const [scraping, setScraping] = useState(false);
   const [lastUpdate, setLastUpdate] = useState('');
   const [extractionMode, setExtractionMode] = useState('');
   const { toasts, addToast } = useToast();
@@ -32,28 +32,6 @@ export default function Layout() {
       if (d.extraction_mode) setExtractionMode(d.extraction_mode);
     }).catch(() => {});
   }, []);
-
-  const handleScrape = async () => {
-    setScraping(true);
-    addToast('Scraping started... This may take a few minutes.', 'info');
-    try {
-      const data = await postApi('/scrape');
-      if (data.result) {
-        addToast(`Scrape complete! Found ${data.result.total_found} articles, ${data.result.total_new} new.`, 'success');
-        setLastUpdate(new Date().toLocaleString());
-      } else if (data.detail) {
-        addToast(`Scrape failed: ${data.detail}`, 'error');
-      }
-    } catch (err) {
-      addToast(`Scrape error: ${err.message}`, 'error');
-    } finally {
-      setScraping(false);
-    }
-  };
-
-  const handleExport = () => {
-    window.open('/api/export/csv', '_blank');
-  };
 
   return (
     <div className="app-layout">
@@ -78,12 +56,6 @@ export default function Layout() {
             {lastUpdate && <span className="last-update">Last scraped: {lastUpdate}</span>}
             <button className="btn btn-icon theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
               {theme === 'dark' ? <FaSun /> : <FaMoon />}
-            </button>
-            <button className="btn btn-outline" onClick={handleExport} title="Export all data as CSV">
-              <FaDownload /> Export
-            </button>
-            <button className="btn btn-primary" onClick={handleScrape} disabled={scraping}>
-              {scraping ? <><FaSpinner className="spin" /> Scraping...</> : <><FaSyncAlt /> Scrape Now</>}
             </button>
           </div>
         </div>
@@ -139,15 +111,15 @@ export default function Layout() {
 
           <div className="footer-links">
             <h5>Data Sources</h5>
-            <a href="https://www.thedailystar.net/tags/road-accident" target="_blank" rel="noopener noreferrer">
-              The Daily Star
+            <a href="https://www.newagebd.net/tags/Road%20accident" target="_blank" rel="noopener noreferrer">
+              New Age Bangladesh
             </a>
-            <a href="https://nirapad.org.bd/" target="_blank" rel="noopener noreferrer">
-              NIRAPAD Bangladesh
-            </a>
-            <a href="https://www.rhd.gov.bd/" target="_blank" rel="noopener noreferrer">
-              Roads &amp; Highways Division
-            </a>
+          </div>
+
+          <div className="footer-links">
+            <h5>Legal</h5>
+            <NavLink to="/privacy">Privacy Policy</NavLink>
+            <NavLink to="/terms">Terms &amp; Disclaimer</NavLink>
           </div>
 
           <div className="footer-links">
@@ -155,11 +127,13 @@ export default function Layout() {
             <div className="footer-creators">
               <div className="creator">
                 <span className="creator-name">Rafeed Chowdhury</span>
-                <span className="creator-role">AI Software Developer</span>
+                <span className="creator-role">Software Engineer</span>
+                <a href="https://www.linkedin.com/in/rafeedcse94/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
               </div>
               <div className="creator">
                 <span className="creator-name">Fahid Khan</span>
-                <span className="creator-role">Software Developer</span>
+                <span className="creator-role">Software Engineer</span>
+                <a href="https://www.linkedin.com/in/fahid-a-khan-46758819b/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
               </div>
             </div>
           </div>

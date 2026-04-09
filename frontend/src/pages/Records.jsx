@@ -1,36 +1,51 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, formatDate } from '../utils/api';
-import { FaDatabase, FaSearch, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaDatabase, FaSearch, FaExternalLinkAlt, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+
+const PAGE_SIZE = 50;
 
 export default function Records() {
   const [records, setRecords] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
   const timerRef = useRef(null);
 
-  const load = useCallback(async (q) => {
+  const load = useCallback(async (q, p) => {
     try {
-      const data = q && q.length >= 2
-        ? await api(`/search?q=${encodeURIComponent(q)}&limit=100`)
-        : await api('/recent?limit=100');
-      setRecords(data);
+      const offset = p * PAGE_SIZE;
+      const qParam = q && q.length >= 2 ? `&q=${encodeURIComponent(q)}` : '';
+      const data = await api(`/records?limit=${PAGE_SIZE}&offset=${offset}${qParam}`);
+      setRecords(data.records);
+      setTotal(data.total);
     } catch (err) {
       console.error('Records error:', err);
     }
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(''); }, [load]);
+  useEffect(() => { load('', 0); }, [load]);
 
   const handleSearch = (val) => {
     setQuery(val);
+    setPage(0);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => load(val), 400);
+    timerRef.current = setTimeout(() => load(val, 0), 400);
   };
+
+  const goPage = (p) => {
+    setPage(p);
+    load(query, p);
+  };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="table-container">
       <div className="table-header">
         <h3><FaDatabase /> Accident Records</h3>
+        <div className="records-meta">
+          <span className="records-count">{total.toLocaleString()} total records</span>
+        </div>
         <div className="search-box">
           <FaSearch />
           <input
@@ -85,6 +100,19 @@ export default function Records() {
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button className="btn btn-sm" disabled={page === 0} onClick={() => goPage(page - 1)}>
+            <FaChevronLeft /> Prev
+          </button>
+          <span className="pagination-info">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button className="btn btn-sm" disabled={page >= totalPages - 1} onClick={() => goPage(page + 1)}>
+            Next <FaChevronRight />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

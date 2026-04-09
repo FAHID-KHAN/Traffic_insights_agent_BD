@@ -4,12 +4,6 @@ import { api, formatDate, COLORS } from '../utils/api';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
 import { FaCarCrash, FaSkullCrossbones, FaUserInjured, FaCalendarDay, FaNewspaper, FaChartArea, FaChartPie, FaChartBar, FaFilter } from 'react-icons/fa';
-import LiveNews from '../components/LiveNews';
-import YouTubeNews from '../components/YouTubeNews';
-import ForecastChart from '../components/ForecastChart';
-import TimeHeatmap from '../components/TimeHeatmap';
-import ClusterTimeline from '../components/ClusterTimeline';
-import YoYSummary from '../components/YoYSummary';
 
 const TIMEFRAMES = [
   { key: '7d',    label: 'Last 7 Days' },
@@ -202,24 +196,6 @@ export default function Dashboard() {
           options={{ indexAxis: 'y', plugins: { legend: { display: false } } }}
         />
       </div>
-
-      {/* ── Year-over-Year Summary ── */}
-      <YoYSummary />
-
-      {/* ── Trend Forecast ── */}
-      <ForecastChart />
-
-      {/* ── Time Patterns Heatmap ── */}
-      <TimeHeatmap />
-
-      {/* ── Accident Clusters ── */}
-      <ClusterTimeline />
-
-      {/* ── YouTube Video News ── */}
-      <YouTubeNews limit={8} />
-
-      {/* ── Live News Feed ── */}
-      <LiveNews limit={12} />
     </>
   );
 }

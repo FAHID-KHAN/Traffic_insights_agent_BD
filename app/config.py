@@ -24,10 +24,10 @@ DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "accidents.db"))
 NEWS_SOURCE_NAME = "New Age"
 NEWS_SOURCE_BASE_URL = "https://www.newagebd.net"
 NEWS_SOURCE_ACCIDENT_URL = "https://www.newagebd.net/tags/Road%20accident"
-SCRAPE_INTERVAL_HOURS = int(os.getenv("SCRAPE_INTERVAL_HOURS", "6"))
+SCRAPE_INTERVAL_HOURS = int(os.getenv("SCRAPE_INTERVAL_HOURS", "24"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 REQUEST_DELAY = int(os.getenv("REQUEST_DELAY", "2"))
-MAX_PAGES_PER_SCRAPE = int(os.getenv("MAX_PAGES", "16"))
+MAX_PAGES_PER_SCRAPE = int(os.getenv("MAX_PAGES", "3"))
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
