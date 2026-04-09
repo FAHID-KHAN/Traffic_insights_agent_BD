@@ -211,7 +211,10 @@ class LLMAccidentExtractor:
 
         return inserted_ids
 
+    _MAX_CONTENT_CHARS = 8000
+
     def _build_user_prompt(self, content: str, published_date: Optional[date]) -> str:
+        content = content[:self._MAX_CONTENT_CHARS]
         district_list = ", ".join(_ALLOWED_DISTRICTS)
         pub = published_date.isoformat() if published_date else "null"
         return (

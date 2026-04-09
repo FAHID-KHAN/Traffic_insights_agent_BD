@@ -106,9 +106,10 @@ def create_app() -> FastAPI:
     # SPA catch-all: serve static files or React index.html for all non-API routes
     @application.get("/{path:path}")
     async def serve_react_spa(path: str = ""):
-        # First, try to serve the exact file from the build directory
         if path:
-            file_path = os.path.join(REACT_DIST, path)
+            file_path = os.path.realpath(os.path.join(REACT_DIST, path))
+            if not file_path.startswith(os.path.realpath(REACT_DIST)):
+                return JSONResponse(status_code=404, content={"detail": "Not found"})
             if os.path.isfile(file_path):
                 return FileResponse(file_path)
         # Fall back to index.html for SPA client-side routing

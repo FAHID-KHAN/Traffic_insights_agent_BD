@@ -59,7 +59,7 @@ BANGLADESH_DISTRICTS = [
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
 WEB_WORKERS = int(os.getenv("WEB_WORKERS", "1" if DEBUG else "4"))
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")   # comma-separated in prod
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173")   # comma-separated in prod
 
 # ─── LLM Extraction Settings ────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
@@ -68,5 +68,8 @@ OPENAI_TIMEOUT_SECONDS = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
 OPENAI_RETRIES = int(os.getenv("OPENAI_RETRIES", "2"))
 MAX_DEATHS_PER_EVENT = int(os.getenv("MAX_DEATHS_PER_EVENT", "50"))
 MAX_INJURIES_PER_EVENT = int(os.getenv("MAX_INJURIES_PER_EVENT", "200"))
+
+# ─── Admin ─────────────────────────────────────────────────────
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
 os.makedirs(DATA_DIR, exist_ok=True)

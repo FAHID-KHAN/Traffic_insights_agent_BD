@@ -2,6 +2,7 @@
 Database models and operations for the Traffic Insights Agent.
 Uses SQLite for simplicity and portability.
 """
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, date
@@ -98,8 +99,19 @@ def init_db():
     conn.close()
 
 
+_ALLOWED_TABLES = {"accidents", "articles", "scrape_log"}
+_ALLOWED_COL_RE = re.compile(r"^[a-z_][a-z0-9_]{0,63}$")
+_ALLOWED_TYPES = {"TEXT", "INTEGER", "REAL", "BLOB", "NUMERIC"}
+
+
 def _migrate_add_column(cursor, table: str, column: str, col_type: str):
     """Add a column to a table if it doesn't already exist."""
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"Disallowed table name: {table}")
+    if not _ALLOWED_COL_RE.match(column):
+        raise ValueError(f"Disallowed column name: {column}")
+    if col_type.upper() not in _ALLOWED_TYPES:
+        raise ValueError(f"Disallowed column type: {col_type}")
     try:
         cursor.execute(f"SELECT {column} FROM {table} LIMIT 1")
     except sqlite3.OperationalError:
@@ -354,7 +366,7 @@ def get_recent_accidents(limit: int = 50):
 
 
 def get_all_accidents_for_map():
-    """Get all accidents with coordinates for map display."""
+    """Get accidents with coordinates for map display (capped at 5000)."""
     with get_db() as conn:
         rows = conn.execute(
             """SELECT a.id, a.accident_type, a.location_raw, a.district,
@@ -364,7 +376,8 @@ def get_all_accidents_for_map():
                FROM accidents a
                JOIN articles ar ON a.article_id = ar.id
                WHERE a.latitude IS NOT NULL AND a.longitude IS NOT NULL
-               ORDER BY a.accident_date DESC"""
+               ORDER BY a.accident_date DESC
+               LIMIT 5000"""
         ).fetchall()
         return [dict(r) for r in rows]
 

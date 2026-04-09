@@ -42,6 +42,11 @@ COPY --from=frontend-build /static/dist ./static/dist/
 # Create data directory
 RUN mkdir -p /app/data
 
+# Non-root user for security
+RUN useradd --create-home --no-log-init appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Defaults (overridable via docker-compose or env)
 ENV APP_ENV=production \
     API_HOST=0.0.0.0 \

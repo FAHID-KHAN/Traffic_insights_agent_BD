@@ -4,20 +4,30 @@ Separated from server setup for clarity.
 """
 import logging
 import re
+import secrets
 import threading
 from datetime import date, datetime
 from typing import Optional
-from fastapi import APIRouter, Query, HTTPException, Depends, Request
+from fastapi import APIRouter, Query, HTTPException, Depends, Request, Header
 
 import requests
 from app.rate_limit import scrape_limiter
 from app import database as db
+from app.config import ADMIN_API_KEY
 from app.scraper import run_scraper, run_published_date_backfill
 from app.extractor import get_extraction_mode
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+
+async def verify_admin_key(x_admin_key: str = Header(...)):
+    """Dependency that validates the admin API key."""
+    if not ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Admin endpoints not configured")
+    if not secrets.compare_digest(x_admin_key, ADMIN_API_KEY):
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
 # ─── Overview ───────────────────────────────────────────────────
@@ -83,7 +93,7 @@ async def get_overview(
             }
     except Exception as e:
         logger.error(f"Error getting overview: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ─── Daily / Monthly ───────────────────────────────────────────
@@ -202,8 +212,8 @@ async def get_scrape_logs(limit: int = Query(20, ge=1, le=100)):
 
 
 @router.post("/scrape")
-async def trigger_scrape(request: Request, _=Depends(scrape_limiter)):
-    """Trigger a scrape cycle. Rate-limited to 3 req/min per IP."""
+async def trigger_scrape(request: Request, _=Depends(scrape_limiter), __=Depends(verify_admin_key)):
+    """Trigger a scrape cycle. Rate-limited to 3 req/min per IP. Requires admin key."""
     import asyncio
     try:
         loop = asyncio.get_event_loop()
@@ -211,17 +221,17 @@ async def trigger_scrape(request: Request, _=Depends(scrape_limiter)):
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Scrape failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/backfill-published-dates")
-async def backfill_published_dates(limit: int = Query(0, ge=0, le=5000)):
+async def backfill_published_dates(limit: int = Query(0, ge=0, le=5000), _=Depends(verify_admin_key)):
     try:
         result = run_published_date_backfill(limit=limit or None)
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Published date backfill failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ─── Latest Articles (Live News Feed) ──────────────────────────
@@ -1091,7 +1101,8 @@ async def export_csv(
                 FROM accidents a
                 LEFT JOIN articles ar ON a.article_id = ar.id
                 {where}
-                ORDER BY a.accident_date DESC""",
+                ORDER BY a.accident_date DESC
+                LIMIT 10000""",
             params,
         ).fetchall()
 
