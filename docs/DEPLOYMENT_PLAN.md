@@ -480,16 +480,16 @@ sudo ln -s /etc/nginx/sites-available/trafficinsight /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 # 7. Get SSL
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+sudo certbot --nginx -d trafficinsightbd.org -d www.trafficinsightbd.org
 
 # 8. Verify
-curl https://yourdomain.com/api/overview
+curl https://trafficinsightbd.org/api/overview
 
 # 9. Trigger first scrape
-curl -X POST https://yourdomain.com/api/scrape
+curl -X POST https://trafficinsightbd.org/api/scrape
 
 # 10. Done — open in browser
-open https://yourdomain.com
+open https://trafficinsightbd.org
 ```
 
 ---
