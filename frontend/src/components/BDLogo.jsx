@@ -1,6 +1,6 @@
 /**
  * Bangladesh-themed Traffic Insight BD logo.
- * BD flag palette: bottle-green + red circle. Road + data motif.
+ * BD flag palette: bottle-green + red circle. Road + data + AI motif.
  */
 export default function BDLogo({ size = 42 }) {
   return (
@@ -34,6 +34,17 @@ export default function BDLogo({ size = 42 }) {
       <rect x="1" y="1" width="46" height="46" rx="13" fill="url(#bd-bg)" />
 
       <rect x="1" y="1" width="46" height="46" rx="13" stroke="#00c47a" strokeWidth="0.8" strokeOpacity="0.4" fill="none" />
+
+      {/* Neural network nodes — AI motif */}
+      <circle cx="8" cy="10" r="1.5" fill="#00c47a" opacity="0.5" />
+      <circle cx="36" cy="8" r="1.3" fill="#00c47a" opacity="0.4" />
+      <circle cx="40" cy="22" r="1.5" fill="#00c47a" opacity="0.5" />
+      <circle cx="6" cy="24" r="1.2" fill="#00c47a" opacity="0.35" />
+      {/* Node connection lines */}
+      <line x1="8" y1="10" x2="22" y2="14" stroke="#00c47a" strokeWidth="0.4" opacity="0.3" />
+      <line x1="36" y1="8" x2="26" y2="14" stroke="#00c47a" strokeWidth="0.4" opacity="0.3" />
+      <line x1="40" y1="22" x2="30" y2="20" stroke="#00c47a" strokeWidth="0.4" opacity="0.3" />
+      <line x1="6" y1="24" x2="14" y2="20" stroke="#00c47a" strokeWidth="0.4" opacity="0.3" />
 
       {/* BD flag red circle */}
       <circle cx="22" cy="20" r="11" fill="url(#circle-g)" filter="url(#glow)" />

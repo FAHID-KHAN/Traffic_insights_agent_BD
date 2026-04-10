@@ -1,5 +1,5 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaLinkedin, FaChartArea, FaNewspaper } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaChartArea, FaNewspaper } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import ToastContainer from './ToastContainer';
@@ -10,12 +10,12 @@ import BDLogo from './BDLogo';
 
 const tabs = [
   { to: '/', icon: <FaChartLine />, label: 'Dashboard', end: true },
+  { to: '/insights', icon: <FaChartArea />, label: 'Insights' },
   { to: '/daily', icon: <FaCalendarDay />, label: 'Daily' },
   { to: '/monthly', icon: <FaCalendarAlt />, label: 'Monthly' },
   { to: '/map', icon: <FaMapMarkedAlt />, label: 'Danger Map' },
   { to: '/zones', icon: <FaExclamationTriangle />, label: 'Danger Zones' },
   { to: '/compare', icon: <FaBalanceScale />, label: 'Compare' },
-  { to: '/insights', icon: <FaChartArea />, label: 'Insights' },
   { to: '/search', icon: <FaSearch />, label: 'Search' },
   { to: '/news', icon: <FaNewspaper />, label: 'News' },
   { to: '/records', icon: <FaList />, label: 'Records' },
@@ -44,13 +44,13 @@ export default function Layout() {
             <BDLogo size={44} />
             <div>
               <h1>Traffic Insight <span className="bd-accent">BD</span></h1>
-              <p>Real-time road accident intelligence • Bangladesh</p>
+              <p>AI-Powered Road Safety Intelligence • Bangladesh</p>
             </div>
           </Link>
           <div className="header-actions">
             {extractionMode && (
-              <span className={`extraction-badge ${extractionMode}`} title={extractionMode === 'advanced' ? 'AI-powered extraction' : 'Pattern-based extraction'}>
-                {extractionMode === 'advanced' ? '⚡ Advanced' : '🔧 Standard'}
+              <span className={`extraction-badge ${extractionMode}`} title={extractionMode === 'advanced' ? 'AI-powered extraction (GPT)' : 'Pattern-based extraction'}>
+                {extractionMode === 'advanced' ? (<><span className="ai-dot" />AI Powered</>) : '🔧 Standard'}
               </span>
             )}
             {lastUpdate && <span className="last-update">Last scraped: {lastUpdate}</span>}
@@ -88,7 +88,7 @@ export default function Layout() {
               <BDLogo size={32} />
               <div>
                 <h4>Traffic Insight <span className="bd-accent">BD</span></h4>
-                <p>Real-time road accident intelligence for Bangladesh</p>
+                <p>AI-Powered Road Safety Intelligence</p>
               </div>
             </div>
             <p className="footer-desc">
@@ -97,6 +97,7 @@ export default function Layout() {
               safety crisis and empower researchers, journalists, and policymakers with
               actionable data.
             </p>
+
           </div>
 
           <div className="footer-links">
@@ -117,30 +118,16 @@ export default function Layout() {
           </div>
 
           <div className="footer-links">
-            <h5>Legal</h5>
+            <h5>Legal & Info</h5>
+            <NavLink to="/about">About Us</NavLink>
             <NavLink to="/privacy">Privacy Policy</NavLink>
             <NavLink to="/terms">Terms &amp; Disclaimer</NavLink>
-          </div>
-
-          <div className="footer-links">
-            <h5>About the Creators</h5>
-            <div className="footer-creators">
-              <div className="creator">
-                <span className="creator-name">Rafeed Chowdhury</span>
-                <span className="creator-role">Software Engineer</span>
-                <a href="https://www.linkedin.com/in/rafeedcse94/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
-              </div>
-              <div className="creator">
-                <span className="creator-name">Fahid Khan</span>
-                <span className="creator-role">Software Engineer</span>
-                <a href="https://www.linkedin.com/in/fahid-a-khan-46758819b/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
-              </div>
-            </div>
           </div>
         </div>
 
         <div className="footer-bottom">
           <p>&copy; {new Date().getFullYear()} Traffic Insight BD</p>
+          <p className="footer-mission">Because every life on the road matters — better data for a safer Bangladesh.</p>
         </div>
       </footer>
     </div>

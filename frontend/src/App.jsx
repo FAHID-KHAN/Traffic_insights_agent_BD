@@ -18,6 +18,7 @@ const Insights       = lazy(() => import('./pages/Insights'));
 const News           = lazy(() => import('./pages/News'));
 const Privacy        = lazy(() => import('./pages/Privacy'));
 const Terms          = lazy(() => import('./pages/Terms'));
+const About          = lazy(() => import('./pages/About'));
 const NotFound       = lazy(() => import('./pages/NotFound'));
 
 /* ── Inline fallback shown while a lazy chunk loads ─────────── */
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="records" element={<Records />} />
                 <Route path="privacy" element={<Privacy />} />
                 <Route path="terms" element={<Terms />} />
+                <Route path="about" element={<About />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
