@@ -1427,6 +1427,24 @@ tr:hover td { background: rgba(0,196,137,0.03); }
   transition: opacity 0.2s;
 }
 .creator-linkedin:hover { opacity: 0.8; }
+
+/* Support link */
+.support-link {
+  display: inline-flex !important; align-items: center; gap: 8px;
+  padding: 10px 20px !important; border-radius: 8px;
+  font-size: 0.84rem; font-weight: 700; letter-spacing: 0.3px;
+  color: #0d0d0d !important; background: #ffdd00;
+  text-decoration: none; transition: all 0.25s var(--ease);
+  width: fit-content; box-shadow: 0 2px 8px rgba(255,221,0,0.25);
+}
+.support-link:hover {
+  background: #ffc800 !important; transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(255,221,0,0.35);
+  padding-left: 20px !important; color: #0d0d0d !important;
+}
+.support-link svg { font-size: 1.05rem; }
+.footer-support-note { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin: 4px 0 0; }
+
 .footer-bottom {
   border-top: 1px solid rgba(0,196,137,0.1);
   max-width: 1400px;

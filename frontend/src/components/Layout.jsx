@@ -1,5 +1,5 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaChartArea, FaNewspaper } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaChartArea, FaNewspaper, FaCoffee } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import ToastContainer from './ToastContainer';
@@ -122,6 +122,14 @@ export default function Layout() {
             <NavLink to="/about">About Us</NavLink>
             <NavLink to="/privacy">Privacy Policy</NavLink>
             <NavLink to="/terms">Terms &amp; Disclaimer</NavLink>
+          </div>
+
+          <div className="footer-links">
+            <h5>Support This Project</h5>
+            <a href="https://buymeacoffee.com/fahidkhan1h" target="_blank" rel="noopener noreferrer" className="support-link">
+              <FaCoffee /> Buy Us a Coffee
+            </a>
+            <p className="footer-support-note">Bangladesh loses thousands to road accidents yearly, yet no structured data exists. Your support keeps this free platform running — powering AI that turns scattered news into life-saving intelligence for researchers and policymakers.</p>
           </div>
         </div>
 
