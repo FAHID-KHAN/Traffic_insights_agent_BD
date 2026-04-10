@@ -41,4 +41,4 @@ class AccidentExtractor:
     def process_article(self, article_id: int, content: str, published_date=None):
         """Extract and insert accident events for an article."""
         inserted_ids = self._delegate.process_article(article_id, content, published_date)
-        return inserted_ids[0] if inserted_ids else None
+        return inserted_ids if inserted_ids else []

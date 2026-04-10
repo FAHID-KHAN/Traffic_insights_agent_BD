@@ -414,7 +414,10 @@ class NewAgeScraper:
             logger.info("Scrape complete: %s found, %s new", total_found, total_new)
         except Exception as exc:
             logger.error("Scrape failed: %s", exc)
-            finish_scrape_log(log_id, total_found, total_new, f"error: {str(exc)}")
+            try:
+                finish_scrape_log(log_id, total_found, total_new, f"error: {str(exc)}")
+            except Exception as log_exc:
+                logger.error("Failed to finish scrape log: %s", log_exc)
             raise
 
         return {"total_found": total_found, "total_new": total_new}

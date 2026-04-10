@@ -4,6 +4,11 @@ import { FaCrosshairs, FaSkullCrossbones, FaUserInjured, FaCarCrash, FaMapMarker
 
 const SEVERITY_COLORS = { critical: '#ef4444', high: '#f97316', moderate: '#eab308', low: '#22c55e' };
 
+const escapeHtml = (str) => {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+};
+
 export default function BlackspotDetection() {
   const [spots, setSpots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +27,8 @@ export default function BlackspotDetection() {
       .finally(() => setLoading(false));
   };
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { fetchData(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchData(); }, [epsKm, minSamples]);
 
   // Initialize map
   useEffect(() => {
@@ -66,11 +71,11 @@ export default function BlackspotDetection() {
       circle.bindPopup(`
         <div style="min-width: 180px">
           <strong>Blackspot #${spot.cluster_id + 1}</strong><br/>
-          <span>${spot.districts.join(', ')}</span><br/>
+          <span>${escapeHtml(spot.districts.join(', '))}</span><br/>
           <strong>${spot.accident_count}</strong> accidents &middot;
           <span style="color:${SEVERITY_COLORS.critical}">${spot.total_deaths}</span> deaths &middot;
           <span style="color:${SEVERITY_COLORS.moderate}">${spot.total_injuries}</span> injuries<br/>
-          <em>${spot.severity} severity</em>
+          <em>${escapeHtml(spot.severity)} severity</em>
         </div>
       `);
 

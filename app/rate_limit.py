@@ -39,6 +39,9 @@ class RateLimiter:
 
         with self._lock:
             self._hits[ip] = [t for t in self._hits[ip] if t > cutoff]
+            if not self._hits[ip]:
+                del self._hits[ip]
+                return True, 0
 
             if len(self._hits[ip]) >= self.max_calls:
                 retry_after = int(self._hits[ip][0] - cutoff) + 1
