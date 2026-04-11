@@ -4,7 +4,7 @@ import { api, adminPost } from '../utils/api';
 import {
   FaHeartbeat, FaDatabase, FaRobot, FaClock, FaSync, FaKey,
   FaPlay, FaCalendarAlt, FaHdd, FaCheckCircle, FaTimesCircle,
-  FaExclamationTriangle, FaSignOutAlt, FaShieldAlt, FaFileDownload,
+  FaExclamationTriangle, FaSignOutAlt, FaShieldAlt, FaFileDownload, FaDownload,
   FaLock, FaSpinner,
 } from 'react-icons/fa';
 
@@ -114,7 +114,7 @@ export default function Health() {
     setScraping(true);
     setActionResult(null);
     try {
-      const res = await adminPost('/scrape', adminKey);
+      await adminPost('/scrape', adminKey);
       setActionResult({ type: 'success', msg: t('health.scrapeTriggered') });
       setTimeout(load, 2000);
     } catch (err) {
@@ -128,7 +128,7 @@ export default function Health() {
     setBackfilling(true);
     setActionResult(null);
     try {
-      const res = await adminPost('/backfill-published-dates', adminKey);
+      await adminPost('/backfill-published-dates', adminKey);
       setActionResult({ type: 'success', msg: t('health.backfillTriggered') });
       setTimeout(load, 2000);
     } catch (err) {
@@ -145,6 +145,10 @@ export default function Health() {
 
   const downloadPdf = (year, month) => {
     window.open(`/api/reports/monthly-pdf?year=${year}&month=${month}`, '_blank');
+  };
+
+  const downloadCsv = () => {
+    window.open('/api/export/csv', '_blank');
   };
 
   if (!adminKey) return <AdminLogin onAuth={setAdminKey} />;
@@ -205,6 +209,13 @@ export default function Health() {
             <div>
               <strong>{t('health.downloadReport')}</strong>
               <small>{t('health.downloadReportDesc', { month: currentMonth, year: currentYear })}</small>
+            </div>
+          </button>
+          <button className="admin-action-btn admin-action-csv" onClick={downloadCsv}>
+            <FaDownload />
+            <div>
+              <strong>{t('health.exportCsv')}</strong>
+              <small>{t('health.exportCsvDesc')}</small>
             </div>
           </button>
         </div>

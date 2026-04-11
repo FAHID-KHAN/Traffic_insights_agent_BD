@@ -2752,6 +2752,7 @@ tr:hover td { background: rgba(0,196,137,0.03); }
 .admin-action-scrape > svg { color: var(--bd-green, #006A4E); }
 .admin-action-backfill > svg { color: #3b82f6; }
 .admin-action-pdf > svg { color: #f97316; }
+.admin-action-csv > svg { color: #8b5cf6; }
 
 /* Admin Toast */
 .admin-toast {

@@ -125,6 +125,8 @@
     "backfillDatesDesc": "Fix missing published dates",
     "downloadReport": "Download PDF Report",
     "downloadReportDesc": "{{month}}/{{year}} monthly summary",
+    "exportCsv": "Export CSV Data",
+    "exportCsvDesc": "Download all accident records as CSV",
     "scrapeTriggered": "Scrape pipeline triggered successfully!",
     "backfillTriggered": "Date backfill started successfully!",
     "scrapeStatus": "Scrape Pipeline",

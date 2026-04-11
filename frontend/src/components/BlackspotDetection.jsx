@@ -29,7 +29,7 @@ export default function BlackspotDetection() {
       .finally(() => setLoading(false));
   };
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [epsKm, minSamples]);
 
   // Initialize map

@@ -138,7 +138,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (timeframe === 'custom' && (!customStart || !customEnd)) return;
     load(); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [load]);
+  }, [load, timeframe, customStart, customEnd]);
 
   const trendLabel = TIMEFRAMES.find((t) => t.key === timeframe)?.label || '';
 

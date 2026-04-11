@@ -125,6 +125,8 @@
     "backfillDatesDesc": "অনুপস্থিত প্রকাশের তারিখ ঠিক করুন",
     "downloadReport": "PDF রিপোর্ট ডাউনলোড",
     "downloadReportDesc": "{{month}}/{{year}} মাসিক সারসংক্ষেপ",
+    "exportCsv": "CSV ডেটা এক্সপোর্ট",
+    "exportCsvDesc": "সমস্ত দুর্ঘটনার রেকর্ড CSV হিসাবে ডাউনলোড করুন",
     "scrapeTriggered": "স্ক্র্যাপ পাইপলাইন সফলভাবে শুরু হয়েছে!",
     "backfillTriggered": "তারিখ ব্যাকফিল সফলভাবে শুরু হয়েছে!",
     "scrapeStatus": "স্ক্র্যাপ পাইপলাইন",

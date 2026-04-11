@@ -99,7 +99,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!active) return;
-    fetchAlerts();
+    fetchAlerts(); // eslint-disable-line react-hooks/set-state-in-effect
     const id = setInterval(fetchAlerts, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [active, fetchAlerts]);
@@ -118,7 +118,7 @@ export default function NotificationBell() {
       new Notification(t(`notifications.${a._type}Title`), { body, icon: '/icon-192.png', tag: a._key });
     });
     const updated = [...new Set([...current, ...alerts.map(a => a._key)])];
-    setSeenIds(updated);
+    setSeenIds(updated); // eslint-disable-line react-hooks/set-state-in-effect
     sessionStorage.setItem(SEEN_KEY, JSON.stringify(updated));
   }, [alerts, active, t]);
 

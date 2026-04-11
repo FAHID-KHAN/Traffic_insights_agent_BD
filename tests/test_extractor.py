@@ -144,11 +144,11 @@ class TestProcessArticle:
             "crashed into a truck in Gazipur on the Dhaka-Mymensingh highway. "
             "The head-on collision happened early morning."
         )
-        acc_id = extractor.process_article(sample_article_id, content, date(2025, 6, 1))
-        assert acc_id is not None
+        ids = extractor.process_article(sample_article_id, content, date(2025, 6, 1))
+        assert len(ids) == 1
 
         rows = db.get_recent_accidents(10)
-        match = [r for r in rows if r["id"] == acc_id]
+        match = [r for r in rows if r["id"] == ids[0]]
         assert len(match) == 1
         assert match[0]["deaths"] >= 5
         assert match[0]["injuries"] >= 12
@@ -156,9 +156,9 @@ class TestProcessArticle:
 
     def test_skips_non_accident(self, extractor, sample_article_id):
         content = "The weather is sunny today in Dhaka. People enjoyed the day."
-        acc_id = extractor.process_article(sample_article_id, content, date(2025, 6, 1))
-        assert acc_id is None
+        ids = extractor.process_article(sample_article_id, content, date(2025, 6, 1))
+        assert ids == []
 
     def test_skips_short_content(self, extractor, sample_article_id):
-        acc_id = extractor.process_article(sample_article_id, "too short", date(2025, 6, 1))
-        assert acc_id is None
+        ids = extractor.process_article(sample_article_id, "too short", date(2025, 6, 1))
+        assert ids == []
