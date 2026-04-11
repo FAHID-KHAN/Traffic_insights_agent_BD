@@ -37,7 +37,7 @@ const creators = [
   {
     name: 'Rafeed Chowdhury',
     role: 'AI Software Developer',
-    bio: 'Rafeed has developed the llm powered by GPT behind Traffic Insight BD\'s AI extraction pipeline. With a deep interest in applied machine learning and LLM, he designed the system that turns raw news text into structured, actionable safety data. He believes that AI should serve real-world problems — and road safety in Bangladesh is one that demands attention.',
+    bio: 'Rafeed has developed the llm pipeline and scrapping architecture behind Traffic Insight BD\'s AI extraction pipeline. With a deep interest in applied machine learning and LLM, he designed the system that turns raw news text into structured, actionable safety data. He believes that AI should serve real-world problems — and road safety in Bangladesh is one that demands attention.',
     linkedin: 'https://www.linkedin.com/in/rafeedcse94/',
   },
   {
