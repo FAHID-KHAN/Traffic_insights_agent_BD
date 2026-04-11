@@ -38,9 +38,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://img.youtube.com; "
-            "font-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "connect-src 'self' https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; "
             "frame-src https://www.youtube.com; "
             "object-src 'none'; "
@@ -111,11 +111,17 @@ def create_app() -> FastAPI:
             if not file_path.startswith(os.path.realpath(REACT_DIST)):
                 return JSONResponse(status_code=404, content={"detail": "Not found"})
             if os.path.isfile(file_path):
-                return FileResponse(file_path)
+                resp = FileResponse(file_path)
+                # Prevent browser from caching SW / index so new builds take effect
+                if path in ("sw.js", "index.html", "registerSW.js"):
+                    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                return resp
         # Fall back to index.html for SPA client-side routing
         index_path = os.path.join(REACT_DIST, "index.html")
         if os.path.isfile(index_path):
-            return FileResponse(index_path)
+            resp = FileResponse(index_path)
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return resp
         return JSONResponse(
             status_code=503,
             content={
