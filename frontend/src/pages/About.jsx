@@ -8,8 +8,8 @@ const features = [
   },
   {
     icon: <FaBrain />,
-    title: 'GPT-Powered Smart Extraction',
-    desc: 'Each article is fed through OpenAI\'s GPT models which parse unstructured Bangla and English text into structured records — extracting casualties, vehicle types, locations, and causes with high accuracy.',
+    title: 'AI-Powered Smart Extraction',
+    desc: 'Each article is fed through AI models which parse unstructured Bangla and English text into structured records — extracting casualties, vehicle types, locations, and causes with high accuracy.',
   },
   {
     icon: <FaMapMarkerAlt />,
