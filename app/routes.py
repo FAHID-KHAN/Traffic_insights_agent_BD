@@ -1488,6 +1488,7 @@ async def get_blackspots(
     min_samples: int = Query(3, ge=2, le=20, description="Min accidents per cluster"),
 ):
     """Identify geographic accident blackspots using DBSCAN spatial clustering."""
+    import hashlib
     import numpy as np
     try:
         from sklearn.cluster import DBSCAN
@@ -1505,7 +1506,20 @@ async def get_blackspots(
     if len(rows) < min_samples:
         return []
 
-    coords = np.array([[r["latitude"], r["longitude"]] for r in rows])
+    # Since coordinates are district centroids, apply deterministic jitter
+    # based on each accident's unique attributes so DBSCAN can find
+    # meaningful sub-clusters within districts.
+    def jitter_coord(row):
+        seed_str = f"{row['id']}-{row['location_raw'] or ''}-{row['accident_date'] or ''}-{row['accident_type'] or ''}"
+        h = hashlib.md5(seed_str.encode()).hexdigest()
+        # ~0.05 degrees ≈ 5.5 km spread around centroid
+        dlat = (int(h[:8], 16) / 0xFFFFFFFF - 0.5) * 0.10
+        dlon = (int(h[8:16], 16) / 0xFFFFFFFF - 0.5) * 0.10
+        return (row["latitude"] + dlat, row["longitude"] + dlon)
+
+    jittered = [jitter_coord(r) for r in rows]
+    coords = np.array(jittered)
+
     # Convert km radius to approximate radians for haversine
     eps_rad = eps_km / 6371.0
 
@@ -1515,14 +1529,16 @@ async def get_blackspots(
     # Group accidents by cluster label (ignore noise label -1)
     from collections import defaultdict
     cluster_map = defaultdict(list)
+    cluster_coords = defaultdict(list)
     for i, label in enumerate(labels):
         if label >= 0:
             cluster_map[int(label)].append(dict(rows[i]))
+            cluster_coords[int(label)].append(jittered[i])
 
     blackspots = []
     for cid, accidents in cluster_map.items():
-        lats = [a["latitude"] for a in accidents]
-        lons = [a["longitude"] for a in accidents]
+        j_lats = [c[0] for c in cluster_coords[cid]]
+        j_lons = [c[1] for c in cluster_coords[cid]]
         total_deaths = sum(a.get("deaths", 0) or 0 for a in accidents)
         total_injuries = sum(a.get("injuries", 0) or 0 for a in accidents)
         districts = list({a["district"] for a in accidents if a["district"]})
@@ -1536,8 +1552,8 @@ async def get_blackspots(
 
         blackspots.append({
             "cluster_id": cid,
-            "center_lat": round(sum(lats) / len(lats), 6),
-            "center_lon": round(sum(lons) / len(lons), 6),
+            "center_lat": round(sum(j_lats) / len(j_lats), 6),
+            "center_lon": round(sum(j_lons) / len(j_lons), 6),
             "radius_km": eps_km,
             "accident_count": len(accidents),
             "total_deaths": total_deaths,

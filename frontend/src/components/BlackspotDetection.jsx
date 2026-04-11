@@ -12,6 +12,7 @@ const escapeHtml = (str) => {
 export default function BlackspotDetection() {
   const [spots, setSpots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [epsKm, setEpsKm] = useState(5);
   const [minSamples, setMinSamples] = useState(3);
   const [expanded, setExpanded] = useState(null);
@@ -21,9 +22,10 @@ export default function BlackspotDetection() {
 
   const fetchData = () => {
     setLoading(true);
+    setError(null);
     api(`/blackspots?eps_km=${epsKm}&min_samples=${minSamples}`)
-      .then(setSpots)
-      .catch(console.error)
+      .then(data => { if (Array.isArray(data)) setSpots(data); else throw new Error(data?.detail || 'Unexpected response'); })
+      .catch(err => { console.error(err); setError(err.message || 'Failed to load blackspot data'); setSpots([]); })
       .finally(() => setLoading(false));
   };
 
@@ -108,6 +110,7 @@ export default function BlackspotDetection() {
       </div>
 
       {loading && <div className="loading-msg">Running DBSCAN clustering...</div>}
+      {error && <div className="loading-msg" style={{ color: '#ef4444' }}>⚠ {error}</div>}
 
       <div className="blackspot-map-container" ref={mapRef} style={{ height: '400px', borderRadius: '8px', marginBottom: '1rem' }}></div>
 
