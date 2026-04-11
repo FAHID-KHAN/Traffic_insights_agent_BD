@@ -17,6 +17,8 @@ AGENTS.md
 
 # Data
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/*.log
 
 # Frontend
@@ -35,3 +37,5 @@ backups/
 # OS
 .DS_Store
 Thumbs.db
+*.bak
+*.bak2
