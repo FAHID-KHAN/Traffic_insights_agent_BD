@@ -154,7 +154,7 @@ async def get_recent(limit: int = Query(50, ge=1, le=200)):
 async def get_records(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    q: Optional[str] = Query(None, min_length=2),
+    q: Optional[str] = Query(None, min_length=2, max_length=500),
 ):
     """Paginated accident records with optional search, returns total count."""
     with db.get_db() as conn:
@@ -202,6 +202,49 @@ async def get_map_data():
 @router.get("/yearly")
 async def get_yearly():
     return db.get_yearly_overview()
+
+
+# ─── Health Check ───────────────────────────────────────────────
+
+@router.get("/health-check")
+async def health_check():
+    """System health metrics: data freshness, DB size, extraction mode."""
+    import os
+    from app.config import DB_PATH
+
+    with db.get_db() as conn:
+        latest = conn.execute(
+            "SELECT MAX(published_date) as d FROM articles"
+        ).fetchone()
+        oldest = conn.execute(
+            "SELECT MIN(published_date) as d FROM articles"
+        ).fetchone()
+        total_articles = conn.execute(
+            "SELECT COUNT(*) as c FROM articles"
+        ).fetchone()["c"]
+        total_accidents = conn.execute(
+            "SELECT COUNT(*) as c FROM accidents"
+        ).fetchone()["c"]
+        scrape_count = conn.execute(
+            "SELECT COUNT(*) as c FROM scrape_logs"
+        ).fetchone()["c"]
+        success_count = conn.execute(
+            "SELECT COUNT(*) as c FROM scrape_logs WHERE status = 'completed'"
+        ).fetchone()["c"]
+
+    db_size_mb = round(os.path.getsize(DB_PATH) / (1024 * 1024), 2) if os.path.exists(DB_PATH) else 0
+
+    return {
+        "latest_article_date": latest["d"] if latest else None,
+        "oldest_article_date": oldest["d"] if oldest else None,
+        "total_articles": total_articles,
+        "total_accidents": total_accidents,
+        "total_scrapes": scrape_count,
+        "successful_scrapes": success_count,
+        "success_rate": round((success_count / scrape_count) * 100, 1) if scrape_count else 0,
+        "db_size_mb": db_size_mb,
+        "extraction_mode": get_extraction_mode(),
+    }
 
 
 # ─── Scrape ─────────────────────────────────────────────────────
@@ -324,6 +367,8 @@ async def get_youtube_videos(
                     continue
                 seen_ids.add(vid)
                 title = title_matches[i] if i < len(title_matches) else "Bangladesh Road Accident News"
+                if len(videos) >= 20:
+                    break
                 videos.append({
                     "video_id": vid,
                     "title": title,
@@ -581,7 +626,7 @@ async def get_danger_zones_summary():
 
 @router.get("/search")
 async def search_accidents(
-    q: str = Query(..., min_length=2),
+    q: str = Query(..., min_length=2, max_length=500),
     limit: int = Query(50, ge=1, le=200),
 ):
     with db.get_db() as conn:
@@ -663,7 +708,7 @@ async def get_distinct_types():
 
 @router.get("/search/advanced")
 async def search_advanced(
-    q: Optional[str] = Query(None, min_length=1),
+    q: Optional[str] = Query(None, min_length=1, max_length=500),
     district: Optional[str] = Query(None),
     type: Optional[str] = Query(None, alias="type"),
     severity: Optional[str] = Query(None),
@@ -1127,6 +1172,170 @@ async def export_csv(
     )
 
 
+# ─── PDF Monthly Report ────────────────────────────────────────
+
+@router.get("/reports/monthly-pdf")
+async def monthly_pdf_report(
+    year: int = Query(..., description="Year"),
+    month: int = Query(..., ge=1, le=12, description="Month (1-12)"),
+):
+    """Generate a downloadable PDF summary for the given month."""
+    from fastapi.responses import StreamingResponse
+    import io
+    import calendar
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+    except ImportError:
+        raise HTTPException(status_code=501, detail="reportlab not installed")
+
+    prefix = f"{year}-{month:02d}"
+    month_name = calendar.month_name[month]
+
+    with db.get_db() as conn:
+        totals = conn.execute(
+            """SELECT COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE strftime('%Y-%m', accident_date) = ?""",
+            (prefix,),
+        ).fetchone()
+
+        by_district = conn.execute(
+            """SELECT district, COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
+               GROUP BY district ORDER BY accidents DESC LIMIT 15""",
+            (prefix,),
+        ).fetchall()
+
+        by_type = conn.execute(
+            """SELECT accident_type, COUNT(*) as count
+               FROM accidents
+               WHERE strftime('%Y-%m', accident_date) = ? AND accident_type IS NOT NULL
+               GROUP BY accident_type ORDER BY count DESC""",
+            (prefix,),
+        ).fetchall()
+
+        daily = conn.execute(
+            """SELECT accident_date, COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths
+               FROM accidents
+               WHERE strftime('%Y-%m', accident_date) = ?
+               GROUP BY accident_date ORDER BY accident_date""",
+            (prefix,),
+        ).fetchall()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title
+    elements.append(Paragraph(
+        f"Traffic Insight BD — Monthly Report",
+        styles["Title"],
+    ))
+    elements.append(Paragraph(
+        f"{month_name} {year}",
+        styles["Heading2"],
+    ))
+    elements.append(Spacer(1, 12))
+
+    # Summary
+    elements.append(Paragraph("Summary", styles["Heading3"]))
+    summary_data = [
+        ["Metric", "Value"],
+        ["Total Accidents", str(totals["accidents"])],
+        ["Total Deaths", str(totals["deaths"])],
+        ["Total Injuries", str(totals["injuries"])],
+        ["Fatality Rate", f"{round(totals['deaths'] / totals['accidents'], 2) if totals['accidents'] else 0}"],
+    ]
+    t = Table(summary_data, colWidths=[200, 200])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#006A4E")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 16))
+
+    # Top Districts
+    if by_district:
+        elements.append(Paragraph("Top Districts", styles["Heading3"]))
+        dist_data = [["District", "Accidents", "Deaths", "Injuries"]]
+        for r in by_district:
+            dist_data.append([r["district"], str(r["accidents"]), str(r["deaths"]), str(r["injuries"])])
+        t2 = Table(dist_data, colWidths=[140, 100, 100, 100])
+        t2.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#006A4E")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ]))
+        elements.append(t2)
+        elements.append(Spacer(1, 16))
+
+    # Accident Types
+    if by_type:
+        elements.append(Paragraph("Accident Types", styles["Heading3"]))
+        type_data = [["Type", "Count"]]
+        for r in by_type:
+            type_data.append([r["accident_type"] or "Unknown", str(r["count"])])
+        t3 = Table(type_data, colWidths=[240, 100])
+        t3.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#006A4E")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ]))
+        elements.append(t3)
+        elements.append(Spacer(1, 16))
+
+    # Daily Breakdown
+    if daily:
+        elements.append(Paragraph("Daily Breakdown", styles["Heading3"]))
+        daily_data = [["Date", "Accidents", "Deaths"]]
+        for r in daily:
+            daily_data.append([r["accident_date"], str(r["accidents"]), str(r["deaths"])])
+        t4 = Table(daily_data, colWidths=[160, 120, 120])
+        t4.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#006A4E")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ]))
+        elements.append(t4)
+
+    # Footer
+    elements.append(Spacer(1, 24))
+    elements.append(Paragraph(
+        "Generated by Traffic Insight BD — trafficinsightbd.org",
+        styles["Italic"],
+    ))
+
+    doc.build(elements)
+    buf.seek(0)
+
+    filename = f"traffic_insight_bd_{year}_{month:02d}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # ─── District Detail ────────────────────────────────────────────
 
 @router.get("/district/{district_name}")
@@ -1279,6 +1488,7 @@ async def get_blackspots(
     min_samples: int = Query(3, ge=2, le=20, description="Min accidents per cluster"),
 ):
     """Identify geographic accident blackspots using DBSCAN spatial clustering."""
+    import hashlib
     import numpy as np
     try:
         from sklearn.cluster import DBSCAN
@@ -1296,7 +1506,20 @@ async def get_blackspots(
     if len(rows) < min_samples:
         return []
 
-    coords = np.array([[r["latitude"], r["longitude"]] for r in rows])
+    # Since coordinates are district centroids, apply deterministic jitter
+    # based on each accident's unique attributes so DBSCAN can find
+    # meaningful sub-clusters within districts.
+    def jitter_coord(row):
+        seed_str = f"{row['id']}-{row['location_raw'] or ''}-{row['accident_date'] or ''}-{row['accident_type'] or ''}"
+        h = hashlib.md5(seed_str.encode()).hexdigest()
+        # ~0.05 degrees ≈ 5.5 km spread around centroid
+        dlat = (int(h[:8], 16) / 0xFFFFFFFF - 0.5) * 0.10
+        dlon = (int(h[8:16], 16) / 0xFFFFFFFF - 0.5) * 0.10
+        return (row["latitude"] + dlat, row["longitude"] + dlon)
+
+    jittered = [jitter_coord(r) for r in rows]
+    coords = np.array(jittered)
+
     # Convert km radius to approximate radians for haversine
     eps_rad = eps_km / 6371.0
 
@@ -1306,14 +1529,16 @@ async def get_blackspots(
     # Group accidents by cluster label (ignore noise label -1)
     from collections import defaultdict
     cluster_map = defaultdict(list)
+    cluster_coords = defaultdict(list)
     for i, label in enumerate(labels):
         if label >= 0:
             cluster_map[int(label)].append(dict(rows[i]))
+            cluster_coords[int(label)].append(jittered[i])
 
     blackspots = []
     for cid, accidents in cluster_map.items():
-        lats = [a["latitude"] for a in accidents]
-        lons = [a["longitude"] for a in accidents]
+        j_lats = [c[0] for c in cluster_coords[cid]]
+        j_lons = [c[1] for c in cluster_coords[cid]]
         total_deaths = sum(a.get("deaths", 0) or 0 for a in accidents)
         total_injuries = sum(a.get("injuries", 0) or 0 for a in accidents)
         districts = list({a["district"] for a in accidents if a["district"]})
@@ -1327,8 +1552,8 @@ async def get_blackspots(
 
         blackspots.append({
             "cluster_id": cid,
-            "center_lat": round(sum(lats) / len(lats), 6),
-            "center_lon": round(sum(lons) / len(lons), 6),
+            "center_lat": round(sum(j_lats) / len(j_lats), 6),
+            "center_lon": round(sum(j_lons) / len(j_lons), 6),
             "radius_km": eps_km,
             "accident_count": len(accidents),
             "total_deaths": total_deaths,

@@ -10,6 +10,12 @@ import 'leaflet.heat';
 import { api, formatDate } from '../utils/api';
 import { FaMapPin, FaFire, FaBuilding, FaSkullCrossbones, FaCarCrash, FaUserInjured, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
+const escapeHtml = (str) => {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+};
+const safeUrl = (url) => (url && (url.startsWith('http://') || url.startsWith('https://'))) ? url : null;
+
 function MapInvalidator() {
   const map = useMap();
   useEffect(() => {
@@ -56,14 +62,14 @@ function MapLayers({ data, mode }) {
       });
       marker.bindPopup(`
         <div style="font-family:Inter;min-width:200px">
-          <strong style="font-size:13px">${acc.accident_type || 'Accident'}</strong><br>
-          <span style="color:#666;font-size:12px">${formatDate(acc.accident_date)}</span><br>
+          <strong style="font-size:13px">${escapeHtml(acc.accident_type || 'Accident')}</strong><br>
+          <span style="color:#666;font-size:12px">${escapeHtml(formatDate(acc.accident_date))}</span><br>
           <hr style="margin:6px 0;border-color:#eee">
-          <b>Location:</b> ${acc.district || acc.location_raw || 'Unknown'}<br>
+          <b>Location:</b> ${escapeHtml(acc.district || acc.location_raw || 'Unknown')}<br>
           <b>Deaths:</b> <span style="color:red">${acc.deaths || 0}</span> |
           <b>Injured:</b> <span style="color:orange">${acc.injuries || 0}</span><br>
-          ${acc.summary ? `<p style="margin-top:6px;font-size:11px;color:#555">${acc.summary.substring(0, 150)}${acc.summary.length > 150 ? '...' : ''}</p>` : ''}
-          ${acc.article_url ? `<a href="${acc.article_url}" target="_blank" style="font-size:11px">Read article →</a>` : ''}
+          ${acc.summary ? `<p style="margin-top:6px;font-size:11px;color:#555">${escapeHtml(acc.summary.substring(0, 150))}${acc.summary.length > 150 ? '...' : ''}</p>` : ''}
+          ${safeUrl(acc.article_url) ? `<a href="${escapeHtml(acc.article_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px">Read article →</a>` : ''}
         </div>
       `);
       cluster.addLayer(marker);
@@ -104,7 +110,7 @@ export default function DangerMap() {
     api('/divisions')
       .then(setDivisions)
       .catch((err) => console.error('Division error:', err));
-  }, []);
+  }, [addToast]);
 
   const toggle = (div) => setExpanded(expanded === div ? null : div);
 

@@ -1,27 +1,31 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaLinkedin, FaChartArea, FaNewspaper } from 'react-icons/fa';
+import { FaChartLine, FaCalendarDay, FaCalendarAlt, FaMapMarkedAlt, FaExclamationTriangle, FaList, FaGithub, FaEnvelope, FaBalanceScale, FaSearch, FaSun, FaMoon, FaChartArea, FaNewspaper, FaCoffee, FaHeartbeat, FaBell } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../utils/api';
 import ToastContainer from './ToastContainer';
 import AlertBanner from './AlertBanner';
+import LangSwitch from './LangSwitch';
+import NotificationBell from './NotificationBell';
 import { useToast } from '../utils/useToast';
 import { useTheme } from '../utils/useTheme';
 import BDLogo from './BDLogo';
 
-const tabs = [
-  { to: '/', icon: <FaChartLine />, label: 'Dashboard', end: true },
-  { to: '/daily', icon: <FaCalendarDay />, label: 'Daily' },
-  { to: '/monthly', icon: <FaCalendarAlt />, label: 'Monthly' },
-  { to: '/map', icon: <FaMapMarkedAlt />, label: 'Danger Map' },
-  { to: '/zones', icon: <FaExclamationTriangle />, label: 'Danger Zones' },
-  { to: '/compare', icon: <FaBalanceScale />, label: 'Compare' },
-  { to: '/insights', icon: <FaChartArea />, label: 'Insights' },
-  { to: '/search', icon: <FaSearch />, label: 'Search' },
-  { to: '/news', icon: <FaNewspaper />, label: 'News' },
-  { to: '/records', icon: <FaList />, label: 'Records' },
+const NAV_KEYS = [
+  { to: '/', icon: <FaChartLine />, key: 'nav.dashboard', end: true },
+  { to: '/insights', icon: <FaChartArea />, key: 'nav.insights' },
+  { to: '/daily', icon: <FaCalendarDay />, key: 'nav.daily' },
+  { to: '/monthly', icon: <FaCalendarAlt />, key: 'nav.monthly' },
+  { to: '/map', icon: <FaMapMarkedAlt />, key: 'nav.dangerMap' },
+  { to: '/zones', icon: <FaExclamationTriangle />, key: 'nav.dangerZones' },
+  { to: '/compare', icon: <FaBalanceScale />, key: 'nav.compare' },
+  { to: '/search', icon: <FaSearch />, key: 'nav.search' },
+  { to: '/news', icon: <FaNewspaper />, key: 'nav.news' },
+  { to: '/records', icon: <FaList />, key: 'nav.records' },
 ];
 
 export default function Layout() {
+  const { t } = useTranslation();
   const [lastUpdate, setLastUpdate] = useState('');
   const [extractionMode, setExtractionMode] = useState('');
   const { toasts, addToast } = useToast();
@@ -43,17 +47,19 @@ export default function Layout() {
           <Link to="/" className="logo">
             <BDLogo size={44} />
             <div>
-              <h1>Traffic Insight <span className="bd-accent">BD</span></h1>
-              <p>Real-time road accident intelligence • Bangladesh</p>
+              <h1>{t('app.title')} <span className="bd-accent">{t('app.titleAccent')}</span></h1>
+              <p>{t('app.tagline')}</p>
             </div>
           </Link>
           <div className="header-actions">
             {extractionMode && (
-              <span className={`extraction-badge ${extractionMode}`} title={extractionMode === 'advanced' ? 'AI-powered extraction' : 'Pattern-based extraction'}>
-                {extractionMode === 'advanced' ? '⚡ Advanced' : '🔧 Standard'}
+              <span className={`extraction-badge ${extractionMode}`} title={extractionMode === 'advanced' ? 'AI-powered extraction (GPT)' : 'Pattern-based extraction'}>
+                {extractionMode === 'advanced' ? (<><span className="ai-dot" />{t('app.aiPowered')}</>) : `🔧 ${t('app.standard')}`}
               </span>
             )}
-            {lastUpdate && <span className="last-update">Last scraped: {lastUpdate}</span>}
+            {lastUpdate && <span className="last-update">{t('app.lastScraped')} {lastUpdate}</span>}
+            <NotificationBell />
+            <LangSwitch />
             <button className="btn btn-icon theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
               {theme === 'dark' ? <FaSun /> : <FaMoon />}
             </button>
@@ -63,14 +69,14 @@ export default function Layout() {
 
       <div className="nav-wrapper">
         <nav className="nav-tabs">
-          {tabs.map((tab) => (
+          {NAV_KEYS.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) => `nav-tab${isActive ? ' active' : ''}`}
             >
-              {tab.icon} {tab.label}
+              {tab.icon} {t(tab.key)}
             </NavLink>
           ))}
         </nav>
@@ -87,60 +93,52 @@ export default function Layout() {
             <div className="footer-brand">
               <BDLogo size={32} />
               <div>
-                <h4>Traffic Insight <span className="bd-accent">BD</span></h4>
-                <p>Real-time road accident intelligence for Bangladesh</p>
+                <h4>{t('app.title')} <span className="bd-accent">{t('app.titleAccent')}</span></h4>
+                <p>{t('app.tagline').split('•')[0].trim()}</p>
               </div>
             </div>
             <p className="footer-desc">
-              Traffic Insight BD aggregates and analyses road accident data scraped from
-              leading Bangladeshi newspapers. Our goal is to bring visibility to the road
-              safety crisis and empower researchers, journalists, and policymakers with
-              actionable data.
+              {t('app.footerDesc')}
             </p>
+
           </div>
 
           <div className="footer-links">
-            <h5>Quick Links</h5>
-            <NavLink to="/">Dashboard</NavLink>
-            <NavLink to="/daily">Daily Analysis</NavLink>
-            <NavLink to="/monthly">Monthly Analysis</NavLink>
-            <NavLink to="/map">Danger Map</NavLink>
-            <NavLink to="/zones">Danger Zones</NavLink>
-            <NavLink to="/records">All Records</NavLink>
+            <h5>{t('footer.quickLinks')}</h5>
+            <NavLink to="/">{t('nav.dashboard')}</NavLink>
+            <NavLink to="/daily">{t('footer.dailyAnalysis')}</NavLink>
+            <NavLink to="/monthly">{t('footer.monthlyAnalysis')}</NavLink>
+            <NavLink to="/map">{t('nav.dangerMap')}</NavLink>
+            <NavLink to="/zones">{t('nav.dangerZones')}</NavLink>
+            <NavLink to="/records">{t('footer.allRecords')}</NavLink>
           </div>
 
           <div className="footer-links">
-            <h5>Data Sources</h5>
+            <h5>{t('footer.dataSources')}</h5>
             <a href="https://www.newagebd.net/tags/Road%20accident" target="_blank" rel="noopener noreferrer">
               New Age Bangladesh
             </a>
           </div>
 
           <div className="footer-links">
-            <h5>Legal</h5>
-            <NavLink to="/privacy">Privacy Policy</NavLink>
-            <NavLink to="/terms">Terms &amp; Disclaimer</NavLink>
+            <h5>{t('footer.legal')}</h5>
+            <NavLink to="/about">{t('footer.about')}</NavLink>
+            <NavLink to="/privacy">{t('footer.privacy')}</NavLink>
+            <NavLink to="/terms">{t('footer.terms')}</NavLink>
           </div>
 
           <div className="footer-links">
-            <h5>About the Creators</h5>
-            <div className="footer-creators">
-              <div className="creator">
-                <span className="creator-name">Rafeed Chowdhury</span>
-                <span className="creator-role">Software Engineer</span>
-                <a href="https://www.linkedin.com/in/rafeedcse94/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
-              </div>
-              <div className="creator">
-                <span className="creator-name">Fahid Khan</span>
-                <span className="creator-role">Software Engineer</span>
-                <a href="https://www.linkedin.com/in/fahid-a-khan-46758819b/" target="_blank" rel="noopener noreferrer" className="creator-linkedin"><FaLinkedin /> LinkedIn</a>
-              </div>
-            </div>
+            <h5>{t('footer.support')}</h5>
+            <a href="https://buymeacoffee.com/fahidkhan1h" target="_blank" rel="noopener noreferrer" className="support-link">
+              <FaCoffee /> {t('footer.buyMeCoffee')}
+            </a>
+            <p className="footer-support-note">{t('footer.supportNote')}</p>
           </div>
         </div>
 
         <div className="footer-bottom">
-          <p>&copy; {new Date().getFullYear()} Traffic Insight BD</p>
+          <p>{t('app.copyright', { year: new Date().getFullYear() })}</p>
+          <p className="footer-mission">{t('app.mission')}</p>
         </div>
       </footer>
     </div>
