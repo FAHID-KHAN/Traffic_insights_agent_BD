@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { api } from '../utils/api';
 import { FaCrosshairs, FaSkullCrossbones, FaUserInjured, FaCarCrash, FaMapMarkerAlt, FaSlidersH } from 'react-icons/fa';
 
@@ -28,8 +30,6 @@ export default function BlackspotDetection() {
   // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
-    const L = window.L;
-    if (!L) return;
 
     mapInstance.current = L.map(mapRef.current, {
       center: [23.81, 90.41],
@@ -40,12 +40,14 @@ export default function BlackspotDetection() {
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 18,
     }).addTo(mapInstance.current);
+
+    // Fix grey tiles on mobile / lazy-rendered containers
+    setTimeout(() => mapInstance.current?.invalidateSize(), 200);
   }, []);
 
   // Update markers when spots change
   useEffect(() => {
-    const L = window.L;
-    if (!L || !mapInstance.current) return;
+    if (!mapInstance.current) return;
 
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];

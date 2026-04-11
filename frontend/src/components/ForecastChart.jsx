@@ -147,6 +147,11 @@ export default function ForecastChart() {
     <div className="chart-card full-width forecast-card">
       <div className="chart-title">
         <FaBrain /> Trend Forecast &amp; Moving Average
+        {histLength < 6 && (
+          <span style={{ fontSize: '0.7em', color: '#f97316', marginLeft: 8, fontWeight: 400 }}>
+            ⚠ Limited data ({histLength} month{histLength !== 1 ? 's' : ''}) — forecast may be unreliable
+          </span>
+        )}
       </div>
 
       <div className="forecast-controls">

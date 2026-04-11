@@ -15,7 +15,7 @@ from app.database import insert_accident
 from app.geo import DISTRICT_COORDINATES, district_to_division
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
 from app.llm.openai_client import OpenAIClient, OpenAIClientError
-from app.normalize import normalize_district
+from app.normalize import normalize_district, normalize_accident_type
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,16 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "accident_type": {"type": ["string", "null"]},
+                    "accident_type": {
+                        "type": ["string", "null"],
+                        "enum": [
+                            "collision", "head-on collision", "hit-and-run", "overturn",
+                            "bus accident", "truck accident", "motorcycle accident",
+                            "car accident", "auto-rickshaw accident", "rickshaw accident",
+                            "pedestrian accident", "train accident", "boat accident",
+                            "vehicle fire", "road accident", None,
+                        ],
+                    },
                     "location_raw": {"type": ["string", "null"]},
                     "district": {"type": ["string", "null"]},
                     "division": {"type": ["string", "null"]},
@@ -182,10 +191,11 @@ class LLMAccidentExtractor:
             # Canonical accident date is the article publish date for consistent daily/monthly grouping.
             accident_dt = published_date
             vehicles = ", ".join(event.vehicles_involved) if event.vehicles_involved else None
+            accident_type = normalize_accident_type(event.accident_type)
 
             accident_id = insert_accident(
                 article_id=article_id,
-                accident_type=event.accident_type,
+                accident_type=accident_type,
                 location_raw=event.location_raw,
                 district=district,
                 division=division,
@@ -220,6 +230,11 @@ class LLMAccidentExtractor:
         return (
             f"Published date: {pub}\n\n"
             f"Allowed districts (must choose exactly one or null): {district_list}\n\n"
+            "Allowed accident_type values (must choose exactly one or null): "
+            "collision, head-on collision, hit-and-run, overturn, bus accident, "
+            "truck accident, motorcycle accident, car accident, auto-rickshaw accident, "
+            "rickshaw accident, pedestrian accident, train accident, boat accident, "
+            "vehicle fire, road accident\n\n"
             "Task:\n"
             "Extract accident events into JSON with schema: \n"
             "{\"accidents\":[{\"accident_type\":string|null,\"location_raw\":string|null,"

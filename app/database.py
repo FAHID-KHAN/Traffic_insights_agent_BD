@@ -94,6 +94,7 @@ def init_db():
 
     # ── Schema migrations for existing databases ──
     _migrate_add_column(cursor, "accidents", "road_name", "TEXT")
+    _migrate_normalize_accident_types(cursor)
 
     conn.commit()
     conn.close()
@@ -116,6 +117,30 @@ def _migrate_add_column(cursor, table: str, column: str, col_type: str):
         cursor.execute(f"SELECT {column} FROM {table} LIMIT 1")
     except sqlite3.OperationalError:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+
+
+def _migrate_normalize_accident_types(cursor):
+    """One-time migration: normalize free-form accident_type values to canonical set."""
+    from app.normalize import normalize_accident_type
+
+    rows = cursor.execute(
+        "SELECT id, accident_type FROM accidents WHERE accident_type IS NOT NULL"
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        original = row[1]
+        normalized = normalize_accident_type(original)
+        if normalized != original:
+            cursor.execute(
+                "UPDATE accidents SET accident_type = ? WHERE id = ?",
+                (normalized, row[0]),
+            )
+            updated += 1
+    if updated:
+        import logging
+        logging.getLogger(__name__).info(
+            "Migration: normalized %d accident_type values", updated
+        )
 
 
 # ─── Article Operations ────────────────────────────────────────

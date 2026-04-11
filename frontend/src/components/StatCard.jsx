@@ -19,7 +19,7 @@ export default function StatCard({ label, value, sub, icon, color }) {
         )}
       </div>
       <div className={`stat-value text-${color || 'cyan'}`}>
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {value == null ? '—' : typeof value === 'number' ? value.toLocaleString() : value}
       </div>
       {sub && <div className="stat-sub">{sub}</div>}
     </div>

@@ -50,8 +50,9 @@ export default function Monthly() {
       }
     : null;
 
-  const dailyAvg = data?.daily_breakdown?.length > 0
-    ? (data.total_accidents / data.daily_breakdown.length).toFixed(1)
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dailyAvg = data?.total_accidents
+    ? (data.total_accidents / daysInMonth).toFixed(1)
     : 0;
 
   return (

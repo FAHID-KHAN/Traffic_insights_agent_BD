@@ -932,7 +932,9 @@ async def get_accident_clusters(
                         j += 1
                     else:
                         break
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as exc:
+                    logger.warning("Cluster date parse error id=%s: %s",
+                                   accidents[j].get("id"), exc)
                     j += 1
                     continue
 

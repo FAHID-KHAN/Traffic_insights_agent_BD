@@ -69,8 +69,8 @@ export default function Compare() {
   // Build values for cards
   const cardValues = d1 && d2 ? CARD_META.map((c) => {
     if (c.key === 'fr') {
-      const v1 = d1.accidents ? (d1.deaths / d1.accidents).toFixed(2) : '0';
-      const v2 = d2.accidents ? (d2.deaths / d2.accidents).toFixed(2) : '0';
+      const v1 = d1.accidents ? (d1.deaths / d1.accidents).toFixed(2) : '—';
+      const v2 = d2.accidents ? (d2.deaths / d2.accidents).toFixed(2) : '—';
       return { ...c, v1, v2, delta: null };
     }
     return { ...c, v1: d1[c.key], v2: d2[c.key], delta: pct(d2[c.key], d1[c.key]) };

@@ -228,7 +228,7 @@ export default function TimeHeatmap() {
           </button>
         </div>
         <div className="forecast-metric-chips">
-          {['accidents', 'deaths'].map(m => (
+          {['accidents', 'deaths', 'injuries'].map(m => (
             <button key={m} className={`fc-chip${metric === m ? ' active' : ''}`} onClick={() => setMetric(m)}>
               {m.charAt(0).toUpperCase() + m.slice(1)}
             </button>

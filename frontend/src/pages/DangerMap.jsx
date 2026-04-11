@@ -67,7 +67,7 @@ function MapLayers({ data, mode }) {
         </div>
       `);
       cluster.addLayer(marker);
-      const intensity = 0.5 + (acc.deaths || 0) * 0.3 + (acc.injuries || 0) * 0.1;
+      const intensity = Math.min(0.5 + (acc.deaths || 0) * 0.3 + (acc.injuries || 0) * 0.1, 3);
       heatPoints.push([acc.latitude, acc.longitude, intensity]);
     });
 
