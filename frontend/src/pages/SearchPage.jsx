@@ -3,7 +3,7 @@ import { api, formatDate, COLORS } from '../utils/api';
 import {
   FaSearch, FaFilter, FaTimes, FaExternalLinkAlt,
   FaSkullCrossbones, FaUserInjured, FaCarCrash,
-  FaDownload, FaMapMarkerAlt,
+  FaMapMarkerAlt,
 } from 'react-icons/fa';
 
 const SEVERITY_OPTIONS = [
@@ -69,24 +69,6 @@ export default function SearchPage() {
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') search();
-  };
-
-  const exportCSV = () => {
-    if (results.length === 0) return;
-    const headers = ['Date', 'Type', 'District', 'Division', 'Location', 'Deaths', 'Injuries', 'Vehicles', 'Summary'];
-    const rows = results.map((r) => [
-      r.accident_date || '', r.accident_type || '', r.district || '',
-      r.division || '', r.location_raw || '', r.deaths || 0,
-      r.injuries || 0, r.vehicles_involved || '', (r.summary || '').replace(/,/g, ';'),
-    ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `traffic_insight_bd_search_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const totalDeaths = results.reduce((s, r) => s + (r.deaths || 0), 0);
@@ -175,11 +157,6 @@ export default function SearchPage() {
               <span className="search-stat text-orange"><FaUserInjured /> {totalInjuries} injuries</span>
             )}
           </div>
-          {results.length > 0 && (
-            <button className="btn btn-outline" onClick={exportCSV}>
-              <FaDownload /> Export CSV
-            </button>
-          )}
         </div>
       )}
 

@@ -24,7 +24,7 @@ export default function AlertBanner() {
     check();
     const interval = setInterval(check, 5 * 60 * 1000); // check every 5 min
     return () => clearInterval(interval);
-  }, []);
+  }, [dismissed]);
 
   const dismiss = (id) => {
     const updated = [...dismissed, id];

@@ -142,54 +142,45 @@ def insert_article(url: str, title: str, content: str,
 
 def get_article_by_url(url: str) -> Optional[dict]:
     """Get article metadata by URL."""
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT id, url, published_date FROM articles WHERE url = ?",
-        (url,),
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, url, published_date FROM articles WHERE url = ?",
+            (url,),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def get_articles_missing_published_date(limit: Optional[int] = None) -> list[dict]:
     """Return articles where published_date is not yet captured."""
-    conn = get_connection()
-    if limit:
-        rows = conn.execute(
-            "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC"
-        ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with get_db() as conn:
+        if limit:
+            rows = conn.execute(
+                "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, url FROM articles WHERE published_date IS NULL ORDER BY id ASC"
+            ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def update_article_published_date(article_id: int, published_date: date):
     """Update article published date."""
-    # Single-purpose helper used by scrape-time repair and explicit backfill.
-    conn = get_connection()
-    conn.execute(
-        "UPDATE articles SET published_date = ? WHERE id = ?",
-        (published_date, article_id),
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE articles SET published_date = ? WHERE id = ?",
+            (published_date, article_id),
+        )
 
 
 def sync_accident_dates_for_article(article_id: int, published_date: date):
     """Sync all accidents for article to canonical article publish date."""
-    # Business rule: accident_date is derived from article published_date for
-    # all events extracted from that article (including multi-event stories).
-    conn = get_connection()
-    conn.execute(
-        "UPDATE accidents SET accident_date = ? WHERE article_id = ?",
-        (published_date, article_id),
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE accidents SET accident_date = ? WHERE article_id = ?",
+            (published_date, article_id),
+        )
 
 
 def insert_accident(article_id: int, accident_type: str = None,
