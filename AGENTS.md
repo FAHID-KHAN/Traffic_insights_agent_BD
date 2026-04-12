@@ -4,12 +4,12 @@
 - `run.py`: local entry point (`uvicorn` app loader).
 - `app/`: backend code.
 - `app/scraper.py`: New Age Bangladesh scraping pipeline.
-- `app/llm/`: OpenAI integration (`openai_client.py`, `llm_schema.py`, `llm_extractor.py`).
+- `app/llm/`: OpenAI integration (`openai_client.py`, `llm_schema.py`, `llm_extractor.py`, `fake_data.py`).
 - `app/database.py`: SQLite schema and query helpers.
 - `app/routes.py`: FastAPI API endpoints.
 - `app/geo.py`, `app/normalize.py`: district normalization, division mapping, coordinates.
 - `static/`: frontend assets (`index.html`, `js/`, `css/`).
-- `data/`: runtime artifacts (`accidents.db`, LLM response/failure logs).
+- `data/`: runtime artifacts (`accidents.db`, LLM response/failure logs, non-incident discard log).
 
 ## Build, Test, and Development Commands
 - Setup:
@@ -24,7 +24,7 @@
   - `curl -X POST http://localhost:8000/api/scrape`
 - Start from fresh DB:
   - `rm -f data/accidents.db`
-  - `rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log`
+  - `rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log data/non_incident_report.log`
   - `python run.py` then trigger scrape
 - Quick quality checks:
   - `flake8 app/`
@@ -36,7 +36,16 @@
 - Preserve API/DB contract used by UI (do not change response shapes or required columns without coordinated update).
 - Use explicit, structured logging for scraper and LLM paths.
 - Keep canonical date rule: `accidents.accident_date` must come from article `published_date` (not LLM content date).
-- Keep guardrails enabled: strict JSON schema, aggregate/historical filtering, and casualty sanity caps.
+- Keep guardrails enabled: strict JSON schema, aggregate/historical filtering, non-incident/null-payload skip checks, and casualty sanity caps.
+
+## LLM Extraction & Discard Rules
+- `articles` should store scraped source content, including editorials, reports, and non-incident stories.
+- `accidents` must store only concrete accident event rows. If the LLM output or backend guardrail decides an event is editorial, research/report-style, aggregate/historical, empty/null, or not a concrete incident, skip insertion entirely.
+- Do not create placeholder `accidents` rows with mostly `NULL` fields or zero casualties just to mark a discarded article.
+- `app/llm/llm_extractor.py` uses `_skip_reason()` before `insert_accident(...)`; preserve this pre-insert gate when changing extraction logic.
+- Skipped LLM events are written as newline-delimited JSON to `data/non_incident_report.log` with `article_id`, `published_date`, `reason`, and an event snapshot for manual QA.
+- Non-incident phrase guardrails live in `app/llm/fake_data.py` as `NON_INCIDENT_PHRASES`; update that list when new report/editorial false positives are found.
+- Valid multi-incident daily news should still insert one `accidents` row per concrete incident, all using the source article `published_date`.
 
 ## Testing Guidelines
 - There is currently no dedicated `tests/` suite.

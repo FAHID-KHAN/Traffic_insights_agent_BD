@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from app.config import DATA_DIR, MAX_DEATHS_PER_EVENT, MAX_INJURIES_PER_EVENT
 from app.database import insert_accident
 from app.geo import DISTRICT_COORDINATES, district_to_division
+from app.llm.fake_data import NON_INCIDENT_PHRASES
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
 from app.llm.openai_client import OpenAIClient, OpenAIClientError
 from app.normalize import normalize_district
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _FAILURE_LOG_PATH = Path(DATA_DIR) / "llm_extraction_failures.log"
 _RESPONSE_LOG_PATH = Path(DATA_DIR) / "llm_extraction_responses.log"
+_DISCARD_LOG_PATH = Path(DATA_DIR) / "non_incident_report.log"
 
 _SYSTEM_PROMPT = (
     "You are an information extraction engine. Extract road-accident events from a news article. "
@@ -157,13 +159,30 @@ class LLMAccidentExtractor:
         inserted_ids: list[int] = []
 
         for event in accidents:
-            # Skip historical/statistical summaries and keep only concrete event records.
-            if self._is_aggregate_or_historical_event(event):
-                logger.info("Article %s: skipped aggregate/historical event: %s", article_id, event.summary)
+            skip_reason = self._skip_reason(event)
+            if skip_reason:
+                self._log_discarded_event(
+                    article_id=article_id,
+                    published_date=published_date,
+                    reason=skip_reason,
+                    event=event,
+                )
+                logger.info(
+                    "Article %s: skipped %s event: %s",
+                    article_id,
+                    skip_reason,
+                    event.summary,
+                )
                 continue
 
             # Guardrails against unrealistic casualty values from aggregate reports.
             if self._is_casualty_outlier(event):
+                self._log_discarded_event(
+                    article_id=article_id,
+                    published_date=published_date,
+                    reason="casualty_outlier",
+                    event=event,
+                )
                 logger.info(
                     "Article %s: skipped outlier event deaths=%s injuries=%s",
                     article_id,
@@ -271,6 +290,73 @@ class LLMAccidentExtractor:
             return True
 
         return any(re.search(pattern, combined_text) for pattern in _AGGREGATE_PATTERNS)
+
+    @staticmethod
+    def _skip_reason(event: AccidentEvent) -> Optional[str]:
+        combined_text = " ".join(
+            part for part in [event.summary, event.location_raw, event.accident_type] if part
+        ).lower()
+        has_metadata = any(
+            [
+                event.accident_type,
+                event.location_raw,
+                event.district,
+                event.division,
+                event.road_name,
+                event.vehicles_involved,
+                event.summary,
+            ]
+        )
+        has_concrete_signal = any(
+            [event.accident_type, event.location_raw, event.district, event.road_name]
+        )
+        has_casualties = event.deaths > 0 or event.injuries > 0
+
+        if LLMAccidentExtractor._is_aggregate_or_historical_event(event):
+            return "aggregate_or_historical"
+
+        if combined_text and any(phrase in combined_text for phrase in NON_INCIDENT_PHRASES):
+            return "non_incident"
+
+        if not has_metadata:
+            return "empty_payload"
+
+        if not has_casualties and not has_concrete_signal:
+            return "no_concrete_incident"
+
+        return None
+
+    def _log_discarded_event(
+        self,
+        article_id: int,
+        published_date: Optional[date],
+        reason: str,
+        event: AccidentEvent,
+    ):
+        """Persist skipped LLM events for manual QA without inserting DB rows."""
+        payload = {
+            "timestamp": datetime.now().isoformat(),
+            "article_id": article_id,
+            "published_date": published_date.isoformat() if published_date else None,
+            "reason": reason,
+            "event": {
+                "accident_type": event.accident_type,
+                "location_raw": event.location_raw,
+                "district": event.district,
+                "division": event.division,
+                "deaths": event.deaths,
+                "injuries": event.injuries,
+                "vehicles_involved": event.vehicles_involved,
+                "road_name": event.road_name,
+                "summary": event.summary,
+            },
+        }
+        try:
+            _DISCARD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with _DISCARD_LOG_PATH.open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except OSError as log_error:
+            logger.error("Failed to persist LLM discard log: %s", log_error)
 
     def _log_failure(
         self,
