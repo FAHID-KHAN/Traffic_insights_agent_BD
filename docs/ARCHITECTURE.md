@@ -45,7 +45,7 @@
 
 The Traffic Insights Agent is a full-stack web application that:
 
-1. **Scrapes** road accident articles from [New Age Bangladesh](https://www.newagebd.net/tags/Road%20accident).
+1. **Scrapes** road accident articles from [New Age Bangladesh](https://www.newagebd.net/tags/accident).
 2. **Extracts** structured data (location, casualties, accident type, vehicles) from raw news article text using regex-based NLP.
 3. **Stores** everything in a local SQLite database.
 4. **Serves** an analytics dashboard via a React single-page application.
@@ -85,7 +85,7 @@ The Traffic Insights Agent is a full-stack web application that:
                              ▼
                 ┌──────────────────────┐
                 │  New Age Bangladesh  │
-                │  /tags/Road%20accident│
+                │  /tags/accident│
                 └──────────────────────┘
 ```
 
@@ -150,7 +150,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
 | `DATA_DIR` | `DATA_DIR` | `<root>/data/` | SQLite database location |
 | `STATIC_DIR` | — | `<root>/static/` | React production build |
 | `DB_PATH` | `DB_PATH` | `data/accidents.db` | Full database file path |
-| `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/Road%20accident` | Scrape target |
+| `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/accident` | Scrape target |
 | `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `24` | Background scrape frequency (6 in prod) |
 | `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `REQUEST_DELAY` | `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
@@ -296,7 +296,7 @@ This eliminates connection leaks that would occur if an exception were raised be
 The scraper is a two-phase pipeline:
 
 **Phase 1 — Discover article links:**
-1. Fetches the tag page `newagebd.net/tags/Road%20accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
+1. Fetches the tag page `newagebd.net/tags/accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
 2. Uses multiple CSS selectors to find `<a>` elements pointing to news articles.
 3. Deduplicates by URL within the current scrape.
 

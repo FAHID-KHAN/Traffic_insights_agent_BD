@@ -15,13 +15,13 @@
 - Setup:
   - `python3 -m venv .venv && source .venv/bin/activate`
   - `pip install -r requirements.txt`
-- Configure API key:
+- Configure API keys:
   - `cp .env.example .env`
-  - set `OPENAI_API_KEY` in `.env`
+  - set `OPENAI_API_KEY` and `ADMIN_API_KEY` in `.env`
 - Run app:
   - `python run.py`
 - Trigger scrape manually:
-  - `curl -X POST http://localhost:8000/api/scrape`
+  - `curl -X POST http://localhost:8000/api/scrape -H "x-admin-key: $ADMIN_API_KEY"`
 - Start from fresh DB:
   - `rm -f data/accidents.db`
   - `rm -f data/llm_extraction_responses.log data/llm_extraction_failures.log data/non_incident_report.log`
@@ -38,6 +38,13 @@
 - Keep canonical date rule: `accidents.accident_date` must come from article `published_date` (not LLM content date).
 - Keep guardrails enabled: strict JSON schema, aggregate/historical filtering, non-incident/null-payload skip checks, and casualty sanity caps.
 
+## Scraper Source Rules
+- The live source is New Age's broader accident tag: `https://www.newagebd.net/tags/accident`.
+- `app/config.py` stores this as `NEWS_SOURCE_ACCIDENT_URL`; `app/scraper.py` appends `?page={page}` when paginating.
+- Do not revert to the older `https://www.newagebd.net/tags/Road%20accident` source; it misses newer/general accident-tag articles such as `296824`.
+- Keep `MAX_PAGES` configurable through `.env`; default local pagination is `3` pages.
+- Existing article URLs are skipped because `articles.url` is unique. To reprocess local data for testing, delete linked `accidents` rows before deleting the target `articles` rows.
+
 ## LLM Extraction & Discard Rules
 - `articles` should store scraped source content, including editorials, reports, and non-incident stories.
 - `accidents` must store only concrete accident event rows. If the LLM output or backend guardrail decides an event is editorial, research/report-style, aggregate/historical, empty/null, or not a concrete incident, skip insertion entirely.
@@ -48,7 +55,7 @@
 - Valid multi-incident daily news should still insert one `accidents` row per concrete incident, all using the source article `published_date`.
 
 ## Testing Guidelines
-- There is currently no dedicated `tests/` suite.
+- Backend tests live in `tests/` and frontend unit tests live in `frontend/src/__tests__/`.
 - For each change, validate:
   - server boot,
   - one scrape cycle,

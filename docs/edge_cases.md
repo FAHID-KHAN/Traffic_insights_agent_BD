@@ -1,4 +1,4 @@
-### Need to discard these artilces as they don't have daily accident news: 
+### Need to discard these articles as they do not have daily accident news:
 
 - Pedestrian fatalities dominate Dhaka road deaths: report
 - Minister’s denial can’t hide road safety crisis
@@ -17,3 +17,5 @@ These edge cases needs to be handled carefully. If one article covers 2 or more 
 - 9 killed in road accidents in 3 districts
 
 LLM, while going through the article content, need to understand if the news is for one insident or multiple insidents combind. If there are multiple insidents, then create seperate records for each one in the accident db with the same published article date as accident date.
+
+Discarded LLM events must not create placeholder rows in `accidents`. They should be logged to `data/non_incident_report.log` with the skip reason and event snapshot.

@@ -22,7 +22,7 @@ DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "accidents.db"))
 # ─── Scraper Settings ──────────────────────────────────────────
 NEWS_SOURCE_NAME = "New Age"
 NEWS_SOURCE_BASE_URL = "https://www.newagebd.net"
-NEWS_SOURCE_ACCIDENT_URL = "https://www.newagebd.net/tags/Road%20accident"
+NEWS_SOURCE_ACCIDENT_URL = "https://www.newagebd.net/tags/accident"
 SCRAPE_INTERVAL_HOURS = int(os.getenv("SCRAPE_INTERVAL_HOURS", "24"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 REQUEST_DELAY = int(os.getenv("REQUEST_DELAY", "2"))

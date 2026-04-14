@@ -293,7 +293,7 @@ Every route handler wraps its queries in `with db.get_db() as conn:`. This ensur
 
 The scraper uses a `requests.Session` to:
 
-1. **Paginate** `newagebd.net/tags/Road%20accident` (up to `MAX_PAGES_PER_SCRAPE`).
+1. **Paginate** `newagebd.net/tags/accident` (up to `MAX_PAGES_PER_SCRAPE`).
 2. For each article link found, **check** if the URL already exists in `articles` (deduplication via `UNIQUE` constraint).
 3. **Fetch and parse** new articles using BeautifulSoup.
 4. **Extract** date, title, content and call `insert_article()`.
@@ -341,7 +341,7 @@ All prefixed `/api` via `router = APIRouter(prefix="/api")`.
 | `GET` | `/api/map-data` | All accidents with lat/lon for map plotting |
 | `GET` | `/api/yearly` | Aggregated stats by year |
 | `GET` | `/api/scrape-logs` | History of scrape runs |
-| `POST` | `/api/scrape` | Manually trigger a scrape (rate-limited: 5 calls/60 s) |
+| `POST` | `/api/scrape` | Manually trigger a scrape (requires `x-admin-key`; rate-limited: 3 calls/60 s) |
 | `GET` | `/api/articles/latest` | Latest scraped article summaries |
 | `GET` | `/api/youtube-videos` | YouTube search results for BD road accident news |
 | `GET` | `/api/compare/monthly` | Side-by-side monthly stats for two date ranges |
@@ -566,7 +566,7 @@ One 4100-line stylesheet — no CSS modules, no Tailwind. Reasons:
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    NewAgeScraper                                │
-│  1. GET newagebd.net/tags/Road%20accident (paginated)           │
+│  1. GET newagebd.net/tags/accident (paginated)           │
 │  2. Parse article list with BeautifulSoup                       │
 │  3. For each new URL: fetch full article page                   │
 │  4. Extract title, content, published_date                      │

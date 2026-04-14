@@ -9,7 +9,7 @@ This application scrapes, processes, and visualizes road accident data to identi
 ## Features
 
 ### Core
-- **Automated Web Scraping** — Scrapes accident news from New Age's road-accident tag page every 6 hours
+- **Automated Web Scraping** — Scrapes accident news from New Age's accident tag page every 6 hours
 - **LLM Data Extraction** — Uses OpenAI to extract accident type, location (district/division), death & injury counts, vehicles involved
 - **Manual Scrape Trigger** — One-click button to trigger immediate scraping
 
@@ -208,7 +208,8 @@ You won't see any data on the dashboard until you run your first scrape:
 - Click the **"Scrape Now"** button in the top-right corner of the dashboard, or
 - Manually trigger via API:
   ```bash
-  curl -X POST http://localhost:8000/api/scrape
+  curl -X POST http://localhost:8000/api/scrape \
+    -H "x-admin-key: YOUR_ADMIN_API_KEY"
   ```
 - Or just wait — the built-in scheduler scrapes automatically every 6 hours.
 
@@ -329,14 +330,14 @@ Full searchable table of every extracted accident with columns for date, type, l
 | `GET` | `/api/youtube-videos` | YouTube search results (cached 30min) |
 | `GET` | `/api/alerts/high-severity` | Recent high-severity alerts |
 | `GET` | `/api/export/csv` | CSV download (supports date/district filters) |
-| `POST` | `/api/scrape` | Trigger manual scrape (non-blocking) |
+| `POST` | `/api/scrape` | Trigger manual scrape (non-blocking; requires `x-admin-key`) |
 | `GET` | `/api/scrape-logs` | Recent scrape history |
 
 ---
 
 ## How It Works
 
-1. **Scraping**: The scraper visits New Age's `/tags/road-accident` page, collects article links, and fetches full article content
+1. **Scraping**: The scraper visits New Age's `/tags/accident` page, collects article links, and fetches full article content
 
 2. **Extraction**: Each article is processed by the OpenAI LLM extractor which uses structured JSON output to identify:
    - **Accident type** (bus crash, hit-and-run, collision, etc.)
@@ -344,7 +345,7 @@ Full searchable table of every extracted accident with columns for date, type, l
    - **Casualties** (death and injury counts from text)
    - **Vehicles involved** (bus, truck, motorcycle, etc.)
 
-3. **Storage**: Structured data is stored in SQLite (WAL mode) with proper indexing for fast queries. All database access uses context-managed connections to prevent leaks.
+3. **Storage**: Raw articles are stored in `articles`; only concrete accident events are inserted into `accidents`. Non-incident, editorial, report-style, empty/null, or casualty-outlier LLM events are skipped and logged to `data/non_incident_report.log`.
 
 4. **Analysis**: Backend computes forecasts, clusters, YoY comparisons, danger indices, and time patterns from the raw data
 
@@ -583,7 +584,7 @@ All settings in `app/config.py` can be overridden via environment variables:
 
 ## Data Source
 
-All data is sourced from **[New Age](https://www.newagebd.net)**, one of Bangladesh's leading English-language newspapers. The scraper specifically targets their [road accident tag](https://www.newagebd.net/tags/Road%20accident) page.
+All data is sourced from **[New Age](https://www.newagebd.net)**, one of Bangladesh's leading English-language newspapers. The scraper specifically targets their [accident tag](https://www.newagebd.net/tags/accident) page.
 
 > **Disclaimer**: This tool is for educational and awareness purposes. Please respect New Age's terms of service and robots.txt. Use responsibly with appropriate rate limiting.
 
