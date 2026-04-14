@@ -129,7 +129,7 @@ export default function Layout() {
 
           <div className="footer-links">
             <h5>{t('footer.support')}</h5>
-            <a href="https://buymeacoffee.com/fahidkhan1h" target="_blank" rel="noopener noreferrer" className="support-link">
+            <a href="https://buymeacoffee.com/trafficinsightbd" target="_blank" rel="noopener noreferrer" className="support-link">
               <FaCoffee /> {t('footer.buyMeCoffee')}
             </a>
             <p className="footer-support-note">{t('footer.supportNote')}</p>
