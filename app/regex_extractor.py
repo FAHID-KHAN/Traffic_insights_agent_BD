@@ -26,6 +26,8 @@ class RegexAccidentExtractor:
         article_id: int,
         content: str,
         published_date: Optional[date] = None,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> list[int]:
         """Extract accident data and insert rows. Returns list of inserted IDs."""
         if not content or len(content.strip()) < 50:

@@ -1,11 +1,14 @@
-### Need to discard these artilces as they don't have daily accident news: 
+### Need to discard these articles as they do not have daily accident news:
 
 - Pedestrian fatalities dominate Dhaka road deaths: report
 - Minister’s denial can’t hide road safety crisis
 - 619 people killed in road accidents across Bangladesh in March: report
 - 20 people killed daily in road accidents during Eid: report
 - Eid-time road deaths 351
+- 13 killed in road accidents in 2 days
+- Pry scholarship exams start in 61 dists
 
+These articles should not create `accidents` rows. The LLM receives both the article title and content, classifies article-level roundups as `time_window_roundup`, classifies non-accident/report/editorial articles as `non_incident_report`, and logs discarded articles to `data/non_incident_report.log`.
 
 ### Handle the edge cases:
 
@@ -17,3 +20,5 @@ These edge cases needs to be handled carefully. If one article covers 2 or more 
 - 9 killed in road accidents in 3 districts
 
 LLM, while going through the article content, need to understand if the news is for one insident or multiple insidents combind. If there are multiple insidents, then create seperate records for each one in the accident db with the same published article date as accident date.
+
+Discarded LLM articles/events must not create placeholder rows in `accidents`. They should be logged to `data/non_incident_report.log` with the skip reason, title/URL for article-level discards, and event snapshot for event-level discards.

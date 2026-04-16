@@ -7,8 +7,17 @@ cd "$PROJECT_DIR"
 echo "▶  Stopping anything on port 8000..."
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 
-echo "▶  Activating virtual environment..."
+
 source .venv/bin/activate
+
+
+pip install -q -r requirements.txt
+
+
+cd frontend
+npm ci --no-audit --silent
+npm run build
+cd "$PROJECT_DIR"
 
 echo "▶  Starting server..."
 python run.py &
@@ -16,7 +25,7 @@ SERVER_PID=$!
 
 echo "▶  Waiting for server to be ready..."
 for i in $(seq 1 20); do
-  if curl -s http://localhost:8000/api/stats/summary > /dev/null 2>&1; then
+  if curl -s http://localhost:8000/api/overview > /dev/null 2>&1; then
     break
   fi
   sleep 0.5

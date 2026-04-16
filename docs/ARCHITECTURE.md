@@ -45,7 +45,7 @@
 
 The Traffic Insights Agent is a full-stack web application that:
 
-1. **Scrapes** road accident articles from [New Age Bangladesh](https://www.newagebd.net/tags/Road%20accident).
+1. **Scrapes** road accident articles from [New Age Bangladesh](https://www.newagebd.net/tags/accident).
 2. **Extracts** structured data (location, casualties, accident type, vehicles) from raw news article text using regex-based NLP.
 3. **Stores** everything in a local SQLite database.
 4. **Serves** an analytics dashboard via a React single-page application.
@@ -85,7 +85,7 @@ The Traffic Insights Agent is a full-stack web application that:
                              ▼
                 ┌──────────────────────┐
                 │  New Age Bangladesh  │
-                │  /tags/Road%20accident│
+                │  /tags/accident│
                 └──────────────────────┘
 ```
 
@@ -150,7 +150,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG" if DEBUG else "WARNING")
 | `DATA_DIR` | `DATA_DIR` | `<root>/data/` | SQLite database location |
 | `STATIC_DIR` | — | `<root>/static/` | React production build |
 | `DB_PATH` | `DB_PATH` | `data/accidents.db` | Full database file path |
-| `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/Road%20accident` | Scrape target |
+| `NEWS_SOURCE_ACCIDENT_URL` | — | `newagebd.net/tags/accident` | Scrape target |
 | `SCRAPE_INTERVAL_HOURS` | `SCRAPE_INTERVAL_HOURS` | `24` | Background scrape frequency (6 in prod) |
 | `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | `30` | HTTP request timeout (seconds) |
 | `REQUEST_DELAY` | `REQUEST_DELAY` | `2` (seconds) | Polite delay between HTTP requests |
@@ -296,16 +296,18 @@ This eliminates connection leaks that would occur if an exception were raised be
 The scraper is a two-phase pipeline:
 
 **Phase 1 — Discover article links:**
-1. Fetches the tag page `newagebd.net/tags/Road%20accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
-2. Uses multiple CSS selectors to find `<a>` elements pointing to news articles.
+1. Fetches the tag page `newagebd.net/tags/accident` (up to `MAX_PAGES_PER_SCRAPE` pages).
+2. Finds `<a>` elements pointing to news articles in the fetched HTML.
 3. Deduplicates by URL within the current scrape.
+
+The scraper is intentionally not restricted to only visible main-list cards right now. If New Age includes unrelated sidebar/latest-news links in the accident tag page HTML, those URLs may still be stored in `articles`; the LLM extraction layer is responsible for discarding non-accident articles before `accidents` insertion.
 
 **Phase 2 — Scrape individual articles:**
 1. For each URL not already in the database (`article_exists()` check):
    - Fetches the full article page.
    - Extracts: **title** (from `<h1>`), **published date** (from `<time>`, `<meta>`, or date `<span>`), **body text** (from article body selectors).
    - Saves the raw article via `insert_article()`.
-   - **Immediately** passes the content to `AccidentExtractor.process_article()` to extract structured data.
+   - **Immediately** passes title, URL, content, and published date to `AccidentExtractor.process_article()` to extract structured data.
 
 **Reliability features:**
 - **Polite crawling:** A configurable `REQUEST_DELAY` (2 seconds) pause is inserted between each HTTP request to avoid overloading the source.
@@ -537,13 +539,12 @@ This is the end-to-end flow when data enters the system — either via the sched
          │     │     └── if date unparseable → store None (don't default to today)
          │     ├── insert_article()      → articles table
          │     │
-         │     └── AccidentExtractor.process_article()
-         │           ├── Relevance check (keyword filter)
-         │           ├── _extract_accident_type()
-         │           ├── _extract_location()   → district + division (normalized) + coords
-         │           ├── _extract_casualties()  → deaths + injuries
-         │           ├── _extract_vehicles()
-         │           ├── _generate_summary()    → filters boilerplate text
+         │     └── AccidentExtractor.process_article(title, url, content, published_date)
+         │           ├── LLM prompt includes title + article content
+         │           ├── classify article_type
+         │           │     daily_incident | time_window_roundup | non_incident_report | unknown
+         │           ├── discard time_window_roundup/non_incident_report to non_incident_report.log
+         │           ├── validate concrete accident events with backend guardrails
          │           └── insert_accident()      → accidents table
          │
          └── finish_scrape_log()        → scrape_logs table (status: completed)

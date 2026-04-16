@@ -38,7 +38,20 @@ class AccidentExtractor:
         else:
             self._delegate = RegexAccidentExtractor()
 
-    def process_article(self, article_id: int, content: str, published_date=None):
+    def process_article(
+        self,
+        article_id: int,
+        content: str,
+        published_date=None,
+        title=None,
+        url=None,
+    ):
         """Extract and insert accident events for an article."""
-        inserted_ids = self._delegate.process_article(article_id, content, published_date)
+        inserted_ids = self._delegate.process_article(
+            article_id,
+            content,
+            published_date,
+            title=title,
+            url=url,
+        )
         return inserted_ids if inserted_ids else []
