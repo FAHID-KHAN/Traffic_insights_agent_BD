@@ -16,8 +16,8 @@ skills/
 AGENTS.md
 
 # Data
-data/*.db
-data/*.log
+#data/*.db
+#data/*.log
 
 # Frontend
 node_modules/

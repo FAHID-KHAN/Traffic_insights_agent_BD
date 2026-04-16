@@ -383,9 +383,12 @@ class NewAgeScraper:
                                 f"Could not parse date for article: {url} — storing without date"
                             )
 
+                        article_title = article_data.get("title", article_info["title"])
+                        article_url = article_data["url"]
+
                         article_id = insert_article(
-                            url=article_data["url"],
-                            title=article_data.get("title", article_info["title"]),
+                            url=article_url,
+                            title=article_title,
                             content=article_data["content"],
                             published_date=article_data.get("published_date"),
                             source=NEWS_SOURCE_NAME,
@@ -398,6 +401,8 @@ class NewAgeScraper:
                             article_id,
                             article_data["content"],
                             pub_date,
+                            title=article_title,
+                            url=article_url,
                         )
 
                 # Early termination: if all articles on this page were duplicates, stop

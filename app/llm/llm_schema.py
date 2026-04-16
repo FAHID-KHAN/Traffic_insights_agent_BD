@@ -1,7 +1,7 @@
 """Schema models for structured accident extraction output."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -62,4 +62,21 @@ class AccidentEvent(BaseModel):
 
 
 class ExtractionResult(BaseModel):
+    article_type: Literal[
+        "daily_incident",
+        "time_window_roundup",
+        "non_incident_report",
+        "unknown",
+    ] = "unknown"
+    skip_reason: str | None = None
     accidents: list[AccidentEvent] = Field(default_factory=list)
+
+    @field_validator("skip_reason", mode="before")
+    @classmethod
+    def _strip_skip_reason(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value

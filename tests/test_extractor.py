@@ -182,6 +182,8 @@ class TestLLMNullHandling:
         extractor = LLMAccidentExtractor(
             client=_FakeLLMClient(
                 {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
                     "accidents": [
                         {
                             "accident_type": None,
@@ -222,6 +224,8 @@ class TestLLMNullHandling:
         extractor = LLMAccidentExtractor(
             client=_FakeLLMClient(
                 {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
                     "accidents": [
                         {
                             "accident_type": None,
@@ -260,6 +264,8 @@ class TestLLMNullHandling:
         extractor = LLMAccidentExtractor(
             client=_FakeLLMClient(
                 {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
                     "accidents": [
                         {
                             "accident_type": "road accident",
@@ -292,12 +298,57 @@ class TestLLMNullHandling:
         assert records[0]["reason"] == "casualty_outlier"
         assert records[0]["event"]["deaths"] == 999
 
+    def test_skips_time_window_roundup_title_without_insert(
+        self,
+        sample_article_id,
+        tmp_path,
+        monkeypatch,
+    ):
+        log_path = tmp_path / "non_incident_report.log"
+        monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
+        title = "13 killed in road accidents in 2 days"
+        url = (
+            "https://www.newagebd.net/post/country/296941/"
+            "13-killed-in-road-accidents-in-2-days"
+        )
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "time_window_roundup",
+                    "skip_reason": "Title says the article summarizes road accidents over two days.",
+                    "accidents": [],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "At least 13 people were killed and 10 more were injured in road crashes "
+            "in several districts between Tuesday and Wednesday.",
+            date(2026, 4, 16),
+            title=title,
+            url=url,
+        )
+
+        assert inserted == []
+        assert db.get_recent_accidents(10) == []
+        records = [json.loads(line) for line in log_path.read_text().splitlines()]
+        assert len(records) == 1
+        assert records[0]["article_id"] == sample_article_id
+        assert records[0]["reason"] == "time_window_roundup"
+        assert records[0]["published_date"] == "2026-04-16"
+        assert records[0]["title"] == title
+        assert records[0]["url"] == url
+        assert "two days" in records[0]["skip_reason"]
+
     def test_keeps_valid_incident_insert(self, sample_article_id, tmp_path, monkeypatch):
         log_path = tmp_path / "non_incident_report.log"
         monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
         extractor = LLMAccidentExtractor(
             client=_FakeLLMClient(
                 {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
                     "accidents": [
                         {
                             "accident_type": "bus crash",
@@ -328,4 +379,62 @@ class TestLLMNullHandling:
         assert len(rows) == 1
         assert rows[0]["district"] == "Gazipur"
         assert rows[0]["deaths"] == 5
+        assert not log_path.exists()
+
+    def test_keeps_valid_daily_multi_location_incidents(
+        self,
+        sample_article_id,
+        tmp_path,
+        monkeypatch,
+    ):
+        log_path = tmp_path / "non_incident_report.log"
+        monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "truck crash",
+                            "location_raw": "Cumilla",
+                            "district": "Cumilla",
+                            "division": "Chittagong",
+                            "deaths": 7,
+                            "injuries": 6,
+                            "vehicles_involved": ["truck"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "summary": "A truck plunged into a ditch in Cumilla, killing 7 and injuring 6.",
+                            "confidence": 0.94,
+                        },
+                        {
+                            "accident_type": "road accident",
+                            "location_raw": "Gazipur",
+                            "district": "Gazipur",
+                            "division": "Dhaka",
+                            "deaths": 2,
+                            "injuries": 1,
+                            "vehicles_involved": ["bus"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "summary": "A bus accident in Gazipur killed 2 people and injured 1.",
+                            "confidence": 0.91,
+                        },
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "Current accident coverage from multiple districts with named locations and casualties.",
+            date(2026, 4, 16),
+            title="9 killed in road accidents in 3 districts",
+        )
+
+        assert len(inserted) == 2
+        rows = db.get_recent_accidents(10)
+        assert len(rows) == 2
+        assert sum(row["deaths"] for row in rows) == 9
         assert not log_path.exists()

@@ -47,6 +47,16 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
+        "article_type": {
+            "type": "string",
+            "enum": [
+                "daily_incident",
+                "time_window_roundup",
+                "non_incident_report",
+                "unknown",
+            ],
+        },
+        "skip_reason": {"type": ["string", "null"]},
         "accidents": {
             "type": "array",
             "items": {
@@ -84,7 +94,7 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
             },
         }
     },
-    "required": ["accidents"],
+    "required": ["article_type", "skip_reason", "accidents"],
 }
 
 _AGGREGATE_PATTERNS = [
@@ -123,6 +133,8 @@ class LLMAccidentExtractor:
         content: str,
         published_date: Optional[date] = None,
         article_id: Optional[int] = None,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> list[AccidentEvent]:
         """Extract accident events from article content."""
         if not content or len(content.strip()) < 50:
@@ -132,7 +144,11 @@ class LLMAccidentExtractor:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": self._build_user_prompt(content=content, published_date=published_date),
+                "content": self._build_user_prompt(
+                    content=content,
+                    published_date=published_date,
+                    title=title,
+                ),
             },
         ]
 
@@ -144,17 +160,41 @@ class LLMAccidentExtractor:
             self._log_response(article_id=article_id, raw_response=raw_content)
             payload = self._parse_json_payload(raw_content)
             result = ExtractionResult.model_validate(payload)
+            if result.article_type in {"time_window_roundup", "non_incident_report"}:
+                self._log_discarded_article(
+                    article_id=article_id,
+                    published_date=published_date,
+                    reason=result.article_type,
+                    title=title,
+                    url=url,
+                    skip_reason=result.skip_reason,
+                )
+                logger.info(
+                    "Article %s: discarded by article classification: %s",
+                    article_id,
+                    result.article_type,
+                )
+                return []
             return result.accidents
         except (OpenAIClientError, json.JSONDecodeError, ValidationError, ValueError) as exc:
             self._log_failure("extract_events", exc, content_preview=content[:500], raw_response=locals().get("raw_content"))
             return []
 
-    def process_article(self, article_id: int, content: str, published_date: Optional[date] = None) -> list[int]:
+    def process_article(
+        self,
+        article_id: int,
+        content: str,
+        published_date: Optional[date] = None,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> list[int]:
         """Extract accidents with LLM and insert all rows for the article."""
         accidents = self.extract_events(
             content=content,
             published_date=published_date,
             article_id=article_id,
+            title=title,
+            url=url,
         )
         inserted_ids: list[int] = []
 
@@ -232,22 +272,42 @@ class LLMAccidentExtractor:
 
     _MAX_CONTENT_CHARS = 8000
 
-    def _build_user_prompt(self, content: str, published_date: Optional[date]) -> str:
+    def _build_user_prompt(
+        self,
+        content: str,
+        published_date: Optional[date],
+        title: Optional[str] = None,
+    ) -> str:
         content = content[:self._MAX_CONTENT_CHARS]
         district_list = ", ".join(_ALLOWED_DISTRICTS)
         pub = published_date.isoformat() if published_date else "null"
+        headline = title.strip() if title else "null"
         return (
             f"Published date: {pub}\n\n"
+            f"Title: {headline}\n\n"
             f"Allowed districts (must choose exactly one or null): {district_list}\n\n"
             "Task:\n"
             "Extract accident events into JSON with schema: \n"
-            "{\"accidents\":[{\"accident_type\":string|null,\"location_raw\":string|null,"
+            "{\"article_type\":\"daily_incident|time_window_roundup|non_incident_report|unknown\","
+            "\"skip_reason\":string|null,"
+            "\"accidents\":[{\"accident_type\":string|null,\"location_raw\":string|null,"
             "\"district\":string|null,\"division\":string|null,\"deaths\":int,"
             "\"injuries\":int,\"vehicles_involved\":string[]|null,"
             "\"accident_date\":\"YYYY-MM-DD\"|null,\"summary\":string|null,"
             "\"confidence\":float|null}]}\n\n"
             "Rules:\n"
             "- Return ONLY JSON.\n"
+            "- First classify the full article using title and content.\n"
+            "- Use article_type=daily_incident only for current concrete accident incident news.\n"
+            "- Use article_type=time_window_roundup when the title/content summarizes accidents over a time window "
+            "such as 'in 2 days', 'over two days', 'in 24 hours', 'in 48 hours', 'this week', 'this month', "
+            "'during Eid', or similar accumulated/statistical wording.\n"
+            "- Use article_type=non_incident_report for editorials, research, reports, analysis, safety statistics, "
+            "or articles without concrete current accident incident metadata.\n"
+            "- For time_window_roundup or non_incident_report, return accidents=[] and explain briefly in skip_reason.\n"
+            "- Do not classify normal daily multi-location incident news as a roundup just because it has multiple accidents.\n"
+            "- Example: title '13 killed in road accidents in 2 days' is time_window_roundup.\n"
+            "- Example: title '9 killed in road accidents in 3 districts' can be daily_incident if no multi-day/statistical window is stated.\n"
             "- district must be one from allowed list or null.\n"
             "- Do not output locality names (e.g., Uttara, Mirpur, Tongi) as district.\n"
             "- Never generate latitude/longitude. Coordinates are handled by backend mapping.\n"
@@ -350,6 +410,33 @@ class LLMAccidentExtractor:
                 "road_name": event.road_name,
                 "summary": event.summary,
             },
+        }
+        try:
+            _DISCARD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with _DISCARD_LOG_PATH.open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except OSError as log_error:
+            logger.error("Failed to persist LLM discard log: %s", log_error)
+
+    def _log_discarded_article(
+        self,
+        article_id: Optional[int],
+        published_date: Optional[date],
+        reason: str,
+        title: Optional[str] = None,
+        url: Optional[str] = None,
+        skip_reason: Optional[str] = None,
+    ):
+        """Persist article-level LLM discards for manual QA without inserting DB rows."""
+        payload = {
+            "timestamp": datetime.now().isoformat(),
+            "article_id": article_id,
+            "published_date": published_date.isoformat() if published_date else None,
+            "reason": reason,
+            "title": title,
+            "url": url,
+            "skip_reason": skip_reason,
+            "event": None,
         }
         try:
             _DISCARD_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)

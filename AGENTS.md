@@ -46,11 +46,16 @@
 - Existing article URLs are skipped because `articles.url` is unique. To reprocess local data for testing, delete linked `accidents` rows before deleting the target `articles` rows.
 
 ## LLM Extraction & Discard Rules
-- `articles` should store scraped source content, including editorials, reports, and non-incident stories.
-- `accidents` must store only concrete accident event rows. If the LLM output or backend guardrail decides an event is editorial, research/report-style, aggregate/historical, empty/null, or not a concrete incident, skip insertion entirely.
+- `articles` should store scraped source content, including editorials, reports, unrelated/sidebar stories, and other non-incident stories found in fetched page HTML.
+- The scraper is intentionally not tightened right now; if unrelated New Age sidebar/latest-news links are collected from `https://www.newagebd.net/tags/accident`, they may remain in `articles`.
+- The LLM extractor receives article `title`, `url`, `content`, and `published_date`.
+- The strict LLM schema includes article-level `article_type`: `daily_incident`, `time_window_roundup`, `non_incident_report`, or `unknown`, plus `skip_reason` and `accidents`.
+- `time_window_roundup` examples such as `13 killed in road accidents in 2 days` must return no accident rows and be logged.
+- Non-accident examples such as `Pry scholarship exams start in 61 dists` must return no accident rows and be logged.
+- `accidents` must store only concrete daily accident event rows. If the LLM article classification, LLM event output, or backend guardrail decides an article/event is editorial, research/report-style, aggregate/historical, empty/null, or not a concrete incident, skip insertion entirely.
 - Do not create placeholder `accidents` rows with mostly `NULL` fields or zero casualties just to mark a discarded article.
 - `app/llm/llm_extractor.py` uses `_skip_reason()` before `insert_accident(...)`; preserve this pre-insert gate when changing extraction logic.
-- Skipped LLM events are written as newline-delimited JSON to `data/non_incident_report.log` with `article_id`, `published_date`, `reason`, and an event snapshot for manual QA.
+- Skipped LLM articles/events are written as newline-delimited JSON to `data/non_incident_report.log` with `article_id`, `published_date`, `reason`, and either title/URL (`event: null`) or an event snapshot for manual QA.
 - Non-incident phrase guardrails live in `app/llm/fake_data.py` as `NON_INCIDENT_PHRASES`; update that list when new report/editorial false positives are found.
 - Valid multi-incident daily news should still insert one `accidents` row per concrete incident, all using the source article `published_date`.
 
