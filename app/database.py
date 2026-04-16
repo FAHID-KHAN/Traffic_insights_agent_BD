@@ -397,3 +397,37 @@ def get_scrape_logs(limit: int = 20):
             (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+def get_articles_with_bad_accidents(mode: str = "nulls") -> list[dict]:
+    """Retun articles whoose accident rows needs re extraction.
+    """
+    with get_db() as conn:
+        if mode == "all":
+            rows = conn.execute(
+                     
+                     """SELECT DISTINCT a.id, a.title,a.content,a.published_date
+                        FROM articles a
+                        JOIN accidents ac ON ac.artcile_id = a.id
+                        ORDER BY a.id""").fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT DISTINCT a.id, a.title ,a.content ,a.published_data
+                   FROM articles a  
+                   JOIN accidents ac ON ac.article_id = a.id
+                   WHERE ac.district IS NULL
+                      OR ac.latitude IS NULL
+                      OR ac.deaths=0 AND ac.injuries = 0
+                   ORDER BY a.id"""
+
+            ).fetchall()
+        
+        return [dict(r) for r in rows]
+    
+def delete_accidents_for_article(article_id: int) -> int:
+    """Delete all accident rows for an article .Returns count deleted"""
+    with get_db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM accidents WHERE article_id = ? ",(article_id,)
+        )  
+        conn.commit()
+        return cursor.rowcount

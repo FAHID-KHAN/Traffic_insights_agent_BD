@@ -247,6 +247,52 @@ async def health_check():
     }
 
 
+@router.get("/reprocess")
+async def reprocess_accidents(mode: str = Query("nulls",regex="^(nulls/all)$"),
+                              _admin: str = Depends(verify_admin_key),):
+    """Reextract accident from articles with bad/null data """
+    from app.extractor import AccidentExtractor
+    from app.database import get_articles_with_bad_accidents,delete_accidents_for_article
+    articles = get_articles_with_bad_accidents(mode=mode)
+    extractor = AccidentExtractor()
+
+    reprocessed = 0
+    total_new = 0
+    skipped = 0
+    errors = []
+
+    for article in articles:
+        article_id = article["id"]
+        content = article.get["content"]
+        pub_date_str = article.get["published_date"]
+
+        if not content or len(content.strip())< 50:
+            skipped += 1
+            continue
+        pub_date = None
+        if pub_date_str:
+            try:
+                from datetime import date,datetime
+                pub_date = datetime.strptime(pub_date_str,"%Y-%m-%d").date()
+            except (ValueError,TypeError):
+                pass
+        try:
+            deleted = delete_accidents_for_article(article_id)
+            inserted_ids = extractor.process_article(article_id,content,pub_date)
+            reprocessed += 1
+            total_new += len(inserted_ids) if inserted_ids else 0
+        except Exception as exc:
+            errors.append({"article_id": article_id,"error": str(exc)})
+    return{
+        "mode":mode,
+        "articles_found":len(articles),
+        "reprocessed": reprocessed,
+        "new_accident_inserted": total_new,
+        "skipped_no_content": skipped,
+        "errors":len(errors),
+        "error_details": errors[:10],
+    }
+
 # ─── Scrape ─────────────────────────────────────────────────────
 
 @router.get("/scrape-logs")
