@@ -35,6 +35,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Application code
 COPY app/ ./app/
 COPY run.py .
+COPY entrypoint.sh .
 
 # Copy built frontend from stage 1
 COPY --from=frontend-build /static/dist ./static/dist/
@@ -44,8 +45,8 @@ RUN mkdir -p /app/data
 
 # Non-root user for security
 RUN useradd --create-home --no-log-init appuser \
-    && chown -R appuser:appuser /app
-USER appuser
+    && chown -R appuser:appuser /app \
+    && chmod +x /app/entrypoint.sh
 
 # Defaults (overridable via docker-compose or env)
 ENV APP_ENV=production \
@@ -59,4 +60,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/api/overview || exit 1
 
+# Start as root so entrypoint can fix data dir ownership, then drops to appuser
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python", "run.py"]
