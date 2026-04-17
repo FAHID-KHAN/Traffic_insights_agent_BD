@@ -62,3 +62,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Start as root so entrypoint can fix data dir ownership, then drops to appuser
 ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["python", "run.py"]
