@@ -13,7 +13,7 @@ The original architecture is preserved:
 - Article pages are scraped and stored in the `articles` table.
 - OpenAI-based structured extraction receives the article title, URL, content, and published date.
 - Extracted concrete accident events are stored in the `accidents` table.
-- Article-level `time_window_roundup` and `non_incident_report` classifications are discarded before accident insert and logged to `data/non_incident_report.log`.
+- Article-level `time_window_roundup`, `non_incident_report`, and `outside_bangladesh` classifications are discarded before accident insert and logged to `data/non_incident_report.log`.
 - Non-incident/report/editorial/null LLM events are also discarded before accident insert and logged.
 - Fresh scrapes now store the correct article-specific published date from New Age article pages.
 - `accidents.accident_date` continues to inherit `articles.published_date`.
@@ -31,7 +31,7 @@ The original architecture is preserved:
    - `published_date` from the article header/byline area
 4. Raw article data is inserted into `articles`.
 5. The OpenAI extraction pipeline processes the article title plus content using a strict JSON schema.
-6. The LLM first classifies the article as `daily_incident`, `time_window_roundup`, `non_incident_report`, or `unknown`.
+6. The LLM first classifies the article as `daily_incident`, `time_window_roundup`, `non_incident_report`, `outside_bangladesh`, or `unknown`.
 7. Backend normalization and filtering are applied.
 8. Concrete daily accident rows are inserted into `accidents`; discarded articles/events are logged to `data/non_incident_report.log`.
 9. Dashboard and analytics APIs read from the resulting SQLite data.
@@ -47,6 +47,7 @@ The original architecture is preserved:
 - Latitude and longitude are assigned only from backend mappings in `geo.py`.
 - Historical or aggregate report-style items are filtered before insertion.
 - Title-driven roundups such as `13 killed in road accidents in 2 days` are classified as `time_window_roundup` and discarded before insertion.
+- Foreign accident articles or events are classified/logged as `outside_bangladesh` and discarded before insertion.
 - Non-incident, editorial, empty/null, and no-concrete-incident LLM events are filtered before insertion.
 - Discarded LLM articles and events are logged as newline-delimited JSON in `data/non_incident_report.log`.
 - Casualty sanity limits are enforced before insert.
@@ -78,7 +79,7 @@ The current implementation uses the LLM for article-level classification before 
 
 The strict response schema includes:
 
-- `article_type`: `daily_incident`, `time_window_roundup`, `non_incident_report`, or `unknown`
+- `article_type`: `daily_incident`, `time_window_roundup`, `non_incident_report`, `outside_bangladesh`, or `unknown`
 - `skip_reason`: nullable explanation for discarded article-level classifications
 - `accidents`: concrete event list for valid daily incident articles
 
@@ -87,7 +88,9 @@ Article-level rules:
 - `daily_incident` articles can create one or more rows in `accidents`.
 - `time_window_roundup` articles return `accidents=[]` and create no accident rows.
 - `non_incident_report` articles return `accidents=[]` and create no accident rows.
+- `outside_bangladesh` articles return `accidents=[]` and create no accident rows.
 - Backend event-level guardrails remain as a fallback for empty/null payloads, aggregate summaries, no-concrete-incident records, and casualty outliers.
+- Event-level accidents outside Bangladesh are also discarded and logged as `outside_bangladesh`.
 
 Known remaining risks:
 
@@ -125,7 +128,7 @@ Contents:
 
 - article id
 - published date
-- article-level reason such as `time_window_roundup` or `non_incident_report`, or event-level backend guardrail reason
+- article-level reason such as `time_window_roundup`, `non_incident_report`, or `outside_bangladesh`, or event-level backend guardrail reason
 - title and URL for article-level discards
 - event snapshot for event-level discards
 
@@ -156,5 +159,5 @@ This log is intended to help QA and future tuning of false positives and false n
 - Check `accident_date` matches `articles.published_date`.
 - Check article dates in DB match the published date shown on the live New Age article page.
 - Check aggregate-report headlines do not create accident rows.
-- Check skipped non-incident and time-window roundup articles appear in `data/non_incident_report.log`.
+- Check skipped non-incident, time-window roundup, and outside-Bangladesh articles/events appear in `data/non_incident_report.log`.
 - Check `/api/overview`, `/api/daily`, `/api/monthly`, and `/api/map-data` still work with the current data source.
