@@ -298,7 +298,7 @@ The scraper uses a `requests.Session` to:
 3. **Fetch and parse** new articles using BeautifulSoup.
 4. **Extract** date, title, content and call `insert_article()`.
 5. Each new article's title, URL, content, and published date are passed to `extractor.py`.
-6. The LLM classifies the whole article before accident insertion. `daily_incident` can insert rows; `time_window_roundup` and `non_incident_report` are discarded and logged.
+6. The LLM classifies the whole article before accident insertion. `daily_incident` can insert rows; `time_window_roundup`, `non_incident_report`, and `outside_bangladesh` are discarded and logged.
 7. Log the run in `scrape_logs`.
 
 A `REQUEST_DELAY` sleep between requests avoids hammering the source server.
@@ -315,11 +315,13 @@ In LLM mode, each new article is processed with title, URL, content, and publish
 
 | Field | Meaning |
 |---|---|
-| `article_type` | `daily_incident`, `time_window_roundup`, `non_incident_report`, or `unknown` |
+| `article_type` | `daily_incident`, `time_window_roundup`, `non_incident_report`, `outside_bangladesh`, or `unknown` |
 | `skip_reason` | Nullable reason for article-level discards |
 | `accidents` | Concrete accident events for valid daily incident articles |
 
-`time_window_roundup` and `non_incident_report` classifications are logged to `data/non_incident_report.log` and do not create `accidents` rows.
+`time_window_roundup`, `non_incident_report`, and `outside_bangladesh` classifications are logged to `data/non_incident_report.log` and do not create `accidents` rows.
+
+Foreign accident reports can remain in `articles` for source traceability, but they must not be inserted into `accidents`. Article-level foreign reports and event-level foreign accident payloads are both logged with reason `outside_bangladesh`.
 
 For valid daily incidents, each extracted event includes:
 
@@ -592,7 +594,8 @@ One 4100-line stylesheet — no CSS modules, no Tailwind. Reasons:
 │                    NLP Extractor                                 │
 │  LLM prompt includes article title and content.                 │
 │  First classifies article_type: daily_incident,                 │
-│  time_window_roundup, non_incident_report, or unknown.          │
+│  time_window_roundup, non_incident_report, outside_bangladesh,  │
+│  or unknown.                                                    │
 │  Discarded articles are logged before any accidents insert.     │
 │  For valid daily incidents, structured events include:          │
 │  • accident_type  (bus, truck, motorcycle, train, boat…)        │

@@ -53,6 +53,7 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                 "daily_incident",
                 "time_window_roundup",
                 "non_incident_report",
+                "outside_bangladesh",
                 "unknown",
             ],
         },
@@ -121,6 +122,42 @@ _AGGREGATE_KEYWORDS = {
     "during march",
 }
 
+_ARTICLE_DISCARD_TYPES = {
+    "time_window_roundup",
+    "non_incident_report",
+    "outside_bangladesh",
+}
+
+_OUTSIDE_BANGLADESH_TERMS = {
+    "afghanistan",
+    "australia",
+    "bhutan",
+    "cambodia",
+    "canada",
+    "china",
+    "delhi",
+    "india",
+    "indonesia",
+    "jakarta",
+    "japan",
+    "kathmandu",
+    "kuala lumpur",
+    "laos",
+    "malaysia",
+    "maldives",
+    "myanmar",
+    "nepal",
+    "new delhi",
+    "pakistan",
+    "philippines",
+    "singapore",
+    "sri lanka",
+    "thailand",
+    "tokyo",
+    "united states",
+    "vietnam",
+}
+
 
 class LLMAccidentExtractor:
     """Extracts one or more accidents from an article using OpenAI."""
@@ -160,7 +197,7 @@ class LLMAccidentExtractor:
             self._log_response(article_id=article_id, raw_response=raw_content)
             payload = self._parse_json_payload(raw_content)
             result = ExtractionResult.model_validate(payload)
-            if result.article_type in {"time_window_roundup", "non_incident_report"}:
+            if result.article_type in _ARTICLE_DISCARD_TYPES:
                 self._log_discarded_article(
                     article_id=article_id,
                     published_date=published_date,
@@ -288,7 +325,7 @@ class LLMAccidentExtractor:
             f"Allowed districts (must choose exactly one or null): {district_list}\n\n"
             "Task:\n"
             "Extract accident events into JSON with schema: \n"
-            "{\"article_type\":\"daily_incident|time_window_roundup|non_incident_report|unknown\","
+            "{\"article_type\":\"daily_incident|time_window_roundup|non_incident_report|outside_bangladesh|unknown\","
             "\"skip_reason\":string|null,"
             "\"accidents\":[{\"accident_type\":string|null,\"location_raw\":string|null,"
             "\"district\":string|null,\"division\":string|null,\"deaths\":int,"
@@ -304,10 +341,16 @@ class LLMAccidentExtractor:
             "'during Eid', or similar accumulated/statistical wording.\n"
             "- Use article_type=non_incident_report for editorials, research, reports, analysis, safety statistics, "
             "or articles without concrete current accident incident metadata.\n"
-            "- For time_window_roundup or non_incident_report, return accidents=[] and explain briefly in skip_reason.\n"
+            "- Use article_type=outside_bangladesh for concrete accident news where the accident happened outside "
+            "Bangladesh, such as in Jakarta, Indonesia, Japan, Thailand, India, Nepal, Pakistan, Myanmar, or any "
+            "other foreign location.\n"
+            "- For time_window_roundup, non_incident_report, or outside_bangladesh, return accidents=[] and explain "
+            "briefly in skip_reason.\n"
             "- Do not classify normal daily multi-location incident news as a roundup just because it has multiple accidents.\n"
             "- Example: title '13 killed in road accidents in 2 days' is time_window_roundup.\n"
             "- Example: title '9 killed in road accidents in 3 districts' can be daily_incident if no multi-day/statistical window is stated.\n"
+            "- Example: title 'Bus crash kills 12 in Jakarta' is outside_bangladesh.\n"
+            "- Example: title 'Road crash kills tourists in Thailand' is outside_bangladesh.\n"
             "- district must be one from allowed list or null.\n"
             "- Do not output locality names (e.g., Uttara, Mirpur, Tongi) as district.\n"
             "- Never generate latitude/longitude. Coordinates are handled by backend mapping.\n"
@@ -352,6 +395,20 @@ class LLMAccidentExtractor:
         return any(re.search(pattern, combined_text) for pattern in _AGGREGATE_PATTERNS)
 
     @staticmethod
+    def _is_outside_bangladesh_event(event: AccidentEvent) -> bool:
+        combined_text = " ".join(
+            part for part in [event.summary, event.location_raw, event.accident_type] if part
+        ).lower()
+
+        if not combined_text:
+            return False
+
+        return any(
+            re.search(r"\b" + re.escape(term) + r"\b", combined_text)
+            for term in _OUTSIDE_BANGLADESH_TERMS
+        )
+
+    @staticmethod
     def _skip_reason(event: AccidentEvent) -> Optional[str]:
         combined_text = " ".join(
             part for part in [event.summary, event.location_raw, event.accident_type] if part
@@ -374,6 +431,9 @@ class LLMAccidentExtractor:
 
         if LLMAccidentExtractor._is_aggregate_or_historical_event(event):
             return "aggregate_or_historical"
+
+        if LLMAccidentExtractor._is_outside_bangladesh_event(event):
+            return "outside_bangladesh"
 
         if combined_text and any(phrase in combined_text for phrase in NON_INCIDENT_PHRASES):
             return "non_incident"

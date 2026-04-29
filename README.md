@@ -339,13 +339,13 @@ Full searchable table of every extracted accident with columns for date, type, l
 
 1. **Scraping**: The scraper visits New Age's `/tags/accident` page, collects article links from the fetched page HTML, and fetches each new article's title, content, URL, and published date.
 
-2. **Extraction**: Each article is processed by the OpenAI LLM extractor with the article title, content, URL, and published date. The LLM first classifies the whole article as `daily_incident`, `time_window_roundup`, `non_incident_report`, or `unknown`, then uses structured JSON output to identify:
+2. **Extraction**: Each article is processed by the OpenAI LLM extractor with the article title, content, URL, and published date. The LLM first classifies the whole article as `daily_incident`, `time_window_roundup`, `non_incident_report`, `outside_bangladesh`, or `unknown`, then uses structured JSON output to identify:
    - **Accident type** (bus crash, hit-and-run, collision, etc.)
    - **Location** (maps to 64 districts + 10 divisions of Bangladesh)
    - **Casualties** (death and injury counts from text)
    - **Vehicles involved** (bus, truck, motorcycle, etc.)
 
-3. **Storage**: Raw articles are stored in `articles`; only concrete daily accident events are inserted into `accidents`. `time_window_roundup` articles such as `13 killed in road accidents in 2 days`, non-incident/editorial/report-style articles, empty/null events, and casualty outliers are skipped and logged to `data/non_incident_report.log`.
+3. **Storage**: Raw articles are stored in `articles`; only concrete daily accident events inside Bangladesh are inserted into `accidents`. `time_window_roundup` articles such as `13 killed in road accidents in 2 days`, non-incident/editorial/report-style articles, foreign accident articles/events classified as `outside_bangladesh`, empty/null events, and casualty outliers are skipped and logged to `data/non_incident_report.log`.
 
 4. **Analysis**: Backend computes forecasts, clusters, YoY comparisons, danger indices, and time patterns from the raw data
 
@@ -584,7 +584,7 @@ All settings in `app/config.py` can be overridden via environment variables:
 
 ## Data Source
 
-All data is sourced from **[New Age](https://www.newagebd.net)**, one of Bangladesh's leading English-language newspapers. The scraper targets their [accident tag](https://www.newagebd.net/tags/accident) page. If unrelated sidebar/latest-news links appear in that page HTML, they may be stored in `articles`, but the title-aware LLM classification must discard them before any `accidents` row is inserted.
+All data is sourced from **[New Age](https://www.newagebd.net)**, one of Bangladesh's leading English-language newspapers. The scraper targets their [accident tag](https://www.newagebd.net/tags/accident) page. If unrelated sidebar/latest-news links or foreign accident reports appear in that page HTML, they may be stored in `articles`, but the title-aware LLM classification must discard them before any `accidents` row is inserted. Foreign accident discards are logged as `outside_bangladesh` in `data/non_incident_report.log`.
 
 > **Disclaimer**: This tool is for educational and awareness purposes. Please respect New Age's terms of service and robots.txt. Use responsibly with appropriate rate limiting.
 

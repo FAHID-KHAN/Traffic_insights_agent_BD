@@ -5,6 +5,7 @@ from datetime import date
 from app.extractor import AccidentExtractor
 import app.llm.llm_extractor as llm_extractor_module
 from app.llm.llm_extractor import LLMAccidentExtractor
+from app.llm.llm_schema import ExtractionResult
 from app.regex_extractor import RegexAccidentExtractor
 from app import database as db
 
@@ -176,6 +177,18 @@ class _FakeLLMClient:
 
 
 class TestLLMNullHandling:
+    def test_schema_accepts_outside_bangladesh_article_type(self):
+        result = ExtractionResult.model_validate(
+            {
+                "article_type": "outside_bangladesh",
+                "skip_reason": "Accident happened in Jakarta, Indonesia.",
+                "accidents": [],
+            }
+        )
+
+        assert result.article_type == "outside_bangladesh"
+        assert result.accidents == []
+
     def test_skips_report_style_payload_without_insert(self, sample_article_id, tmp_path, monkeypatch):
         log_path = tmp_path / "non_incident_report.log"
         monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
@@ -340,6 +353,92 @@ class TestLLMNullHandling:
         assert records[0]["title"] == title
         assert records[0]["url"] == url
         assert "two days" in records[0]["skip_reason"]
+
+    def test_skips_outside_bangladesh_article_without_insert(
+        self,
+        sample_article_id,
+        tmp_path,
+        monkeypatch,
+    ):
+        log_path = tmp_path / "non_incident_report.log"
+        monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
+        title = "Bus crash kills 12 in Jakarta"
+        url = "https://www.newagebd.net/post/world/example"
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "outside_bangladesh",
+                    "skip_reason": "The crash happened in Jakarta, Indonesia, not Bangladesh.",
+                    "accidents": [],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "At least 12 people were killed when a bus crashed in Jakarta, Indonesia.",
+            date(2026, 4, 20),
+            title=title,
+            url=url,
+        )
+
+        assert inserted == []
+        assert db.get_recent_accidents(10) == []
+        records = [json.loads(line) for line in log_path.read_text().splitlines()]
+        assert len(records) == 1
+        assert records[0]["article_id"] == sample_article_id
+        assert records[0]["reason"] == "outside_bangladesh"
+        assert records[0]["published_date"] == "2026-04-20"
+        assert records[0]["title"] == title
+        assert records[0]["url"] == url
+        assert "not Bangladesh" in records[0]["skip_reason"]
+        assert records[0]["event"] is None
+
+    def test_skips_outside_bangladesh_event_without_insert(
+        self,
+        sample_article_id,
+        tmp_path,
+        monkeypatch,
+    ):
+        log_path = tmp_path / "non_incident_report.log"
+        monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "bus crash",
+                            "location_raw": "Jakarta, Indonesia",
+                            "district": None,
+                            "division": None,
+                            "deaths": 12,
+                            "injuries": 5,
+                            "vehicles_involved": ["bus"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "summary": "A bus crash in Jakarta, Indonesia killed 12 people.",
+                            "confidence": 0.95,
+                        }
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "At least 12 people were killed when a bus crashed in Jakarta, Indonesia.",
+            date(2026, 4, 20),
+        )
+
+        assert inserted == []
+        assert db.get_recent_accidents(10) == []
+        records = [json.loads(line) for line in log_path.read_text().splitlines()]
+        assert len(records) == 1
+        assert records[0]["reason"] == "outside_bangladesh"
+        assert records[0]["event"]["location_raw"] == "Jakarta, Indonesia"
+        assert records[0]["event"]["deaths"] == 12
 
     def test_keeps_valid_incident_insert(self, sample_article_id, tmp_path, monkeypatch):
         log_path = tmp_path / "non_incident_report.log"

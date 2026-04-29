@@ -1912,3 +1912,36 @@ raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"
 [2026-04-16T13:53:14.183086] article_id=638
 raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"truck hit bicycle","location_raw":"Meherpur-Chuadanga road, Chandbil area, Meherpur","district":"Meherpur","division":null,"deaths":2,"injuries":0,"vehicles_involved":["truck","bicycle"],"road_name":"Meherpur-Chuadanga road","accident_date":null,"summary":"A cement-laden truck lost control and hit a bicycle in Chandbil area of Meherpur, killing two youths on the spot.","confidence":0.9}]}
 --------------------------------------------------------------------------------
+[2026-04-29T02:37:48.332921] article_id=639
+raw_response={"article_type":"outside_bangladesh","skip_reason":"Accident occurred near Jakarta, Indonesia (outside Bangladesh).","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:37:54.678161] article_id=640
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"trolley overturn","location_raw":"Galua Bazar on the Rajapur-Bhandaria Highway under Rajapur, Jhalakati","district":"Jhalokati","division":"Barishal","deaths":1,"injuries":0,"vehicles_involved":null,"road_name":"Rajapur-Bhandaria Highway","accident_date":null,"summary":"A brick-laden trolley overturned into a roadside ditch in Galua Bazar, Rajapur, killing helper Tanvir Islam.","confidence":0.86}]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:04.896465] article_id=641
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"collision","location_raw":"Fakirkandi area on the Dhaka–Khulna highway, Gopalganj Sadar upazila","district":"Gopalganj","division":null,"deaths":1,"injuries":5,"vehicles_involved":["bus","auto-rickshaw"],"road_name":"Dhaka–Khulna highway","accident_date":null,"summary":"Bus collided with a battery-run easy-bike in Fakirkandi, killing a 3-year-old and injuring five.","confidence":0.86},{"accident_type":"head-on collision","location_raw":"Narail-Magura road, Narail","district":"Narail","division":null,"deaths":1,"injuries":0,"vehicles_involved":["auto-rickshaw"],"road_name":"Narail-Magura road","accident_date":null,"summary":"Nosimon driver died after head-on collision with an engine-run auto-van on Narail-Magura road.","confidence":0.78},{"accident_type":"collision","location_raw":"Wireless area of Mirsarai upazila on Dhaka-Chattogram Highway","district":"Chattogram","division":null,"deaths":1,"injuries":0,"vehicles_involved":["motorcycle","car"],"road_name":"Dhaka-Chattogram Highway","accident_date":null,"summary":"Motorcycle rider died after being hit by a private car in Mirsarai on Dhaka-Chattogram Highway.","confidence":0.84},{"accident_type":"head-on collision","location_raw":"Patiya bypass on the Chattogram-Cox’s Bazar Highway","district":"Chattogram","division":null,"deaths":0,"injuries":21,"vehicles_involved":["bus"],"road_name":"Chattogram-Cox’s Bazar Highway","accident_date":null,"summary":"Two buses collided head-on at Patiya bypass, injuring 21 passengers.","confidence":0.83},{"accident_type":"run over","location_raw":"Arappur Jamtala area of Jhenaidah town","district":"Jhenaidah","division":null,"deaths":1,"injuries":0,"vehicles_involved":["truck"],"road_name":null,"accident_date":null,"summary":"A woman was killed after being run over by a sand-laden truck in Arappur Jamtala, Jhenaidah.","confidence":0.86}]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:10.729420] article_id=642
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"hit-and-run","location_raw":"Siddheswari area, city; near Monwara Hospital","district":"Dhaka","division":null,"deaths":1,"injuries":0,"vehicles_involved":["pickup"],"road_name":null,"accident_date":null,"summary":"A pickup van hit Harun Or Rashid in Siddheswari near Monwara Hospital; he later died at Dhaka Medical College Hospital.","confidence":0.86}]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:16.968602] article_id=643
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"truck hit pedestrian","location_raw":"In front of Jatrabari fish market, Jatrabari area, the capital","district":"Dhaka","division":null,"deaths":1,"injuries":0,"vehicles_involved":["truck"],"road_name":null,"accident_date":null,"summary":"A truck hit a 65-year-old woman while she was crossing the road in front of Jatrabari fish market; she later died at Dhaka Medical College Hospital.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:23.413574] article_id=644
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"pickup crashed into stationary truck","location_raw":"Bittipara, Sadar upazila, Kushtia","district":"Kushtia","division":null,"deaths":2,"injuries":3,"vehicles_involved":["pickup","truck"],"road_name":null,"accident_date":null,"summary":"In Kushtia Sadar's Bittipara, a pickup hit a parked truck around 6:30am, killing 2 and injuring 3; the injured were taken to Kushtia General Hospital.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:28.432693] article_id=645
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is about a UEFA Champions League match (PSG vs Bayern), not a road-accident incident report.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:32.801398] article_id=646
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is about West Bengal Assembly election phase 2 polling and voter lists; no road-accident incident described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:37.127034] article_id=647
+raw_response={"article_type":"outside_bangladesh","skip_reason":"Article describes drone attacks and explosions in Ukraine and Russia, not road-accident incidents in Bangladesh.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:41.729639] article_id=648
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is about government non-concessional loans and highway improvement financing; no road-accident incident described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-04-29T02:38:46.504184] article_id=649
+raw_response={"article_type":"non_incident_report","skip_reason":"Article discusses EU election observation report and recommendations; no road-accident incidents described.","accidents":[]}
+--------------------------------------------------------------------------------

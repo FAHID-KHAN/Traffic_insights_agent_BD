@@ -542,8 +542,8 @@ This is the end-to-end flow when data enters the system — either via the sched
          │     └── AccidentExtractor.process_article(title, url, content, published_date)
          │           ├── LLM prompt includes title + article content
          │           ├── classify article_type
-         │           │     daily_incident | time_window_roundup | non_incident_report | unknown
-         │           ├── discard time_window_roundup/non_incident_report to non_incident_report.log
+         │           │     daily_incident | time_window_roundup | non_incident_report | outside_bangladesh | unknown
+         │           ├── discard time_window_roundup/non_incident_report/outside_bangladesh to non_incident_report.log
          │           ├── validate concrete accident events with backend guardrails
          │           └── insert_accident()      → accidents table
          │

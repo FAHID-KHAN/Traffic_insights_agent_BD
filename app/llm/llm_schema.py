@@ -66,6 +66,7 @@ class ExtractionResult(BaseModel):
         "daily_incident",
         "time_window_roundup",
         "non_incident_report",
+        "outside_bangladesh",
         "unknown",
     ] = "unknown"
     skip_reason: str | None = None
