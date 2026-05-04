@@ -42,6 +42,28 @@ def _seed(n=3):
         )
 
 
+def _seed_road(road_name, deaths=1, injuries=0, district="Sylhet"):
+    aid = db.insert_article(
+        f"https://example.com/road-{road_name}-{deaths}-{injuries}",
+        f"Article {road_name}",
+        "content",
+        date(2025, 6, 1),
+    )
+    db.insert_accident(
+        article_id=aid,
+        accident_type="bus accident",
+        district=district,
+        division="Sylhet",
+        latitude=24.89,
+        longitude=91.86,
+        deaths=deaths,
+        injuries=injuries,
+        road_name=road_name,
+        accident_date=date(2025, 6, 1),
+        summary="Test road accident",
+    )
+
+
 # ── Tests ───────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -105,6 +127,52 @@ class TestDangerZones:
         _seed(3)
         r = await client.get("/api/danger-zones?start=2025-06-01&end=2025-06-02&limit=5")
         assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestRoadAnalysis:
+    async def test_roads_aggregates_canonical_duplicates(self, client):
+        _seed_road("Dhaka-Sylhet Highway", deaths=1, injuries=2)
+        _seed_road("Dhaka-Sylhet highway", deaths=2, injuries=3)
+
+        r = await client.get("/api/roads?limit=10")
+
+        assert r.status_code == 200
+        data = r.json()
+        road = next(item for item in data if item["road_name"] == "Dhaka-Sylhet Highway")
+        assert road["accidents"] == 2
+        assert road["deaths"] == 3
+        assert road["injuries"] == 5
+        assert len([item for item in data if "Dhaka-Sylhet" in item["road_name"]]) == 1
+
+    async def test_backfill_road_names_dry_run_and_apply(self, client, monkeypatch):
+        import app.routes as routes
+
+        monkeypatch.setattr(routes, "ADMIN_API_KEY", "test-key")
+        _seed_road("Dhaka–Chattogram highway", deaths=1, district="Feni")
+
+        dry_run = await client.post(
+            "/api/backfill-road-names?dry_run=true",
+            headers={"x-admin-key": "test-key"},
+        )
+
+        assert dry_run.status_code == 200
+        dry_result = dry_run.json()["result"]
+        assert dry_result["dry_run"] is True
+        assert dry_result["changed"] == 1
+        assert dry_result["sample"][0]["after"] == "Dhaka-Chattogram Highway"
+        assert db.get_recent_accidents(1)[0]["road_name"] == "Dhaka–Chattogram highway"
+
+        applied = await client.post(
+            "/api/backfill-road-names?dry_run=false",
+            headers={"x-admin-key": "test-key"},
+        )
+
+        assert applied.status_code == 200
+        apply_result = applied.json()["result"]
+        assert apply_result["dry_run"] is False
+        assert apply_result["changed"] == 1
+        assert db.get_recent_accidents(1)[0]["road_name"] == "Dhaka-Chattogram Highway"
 
 
 @pytest.mark.asyncio

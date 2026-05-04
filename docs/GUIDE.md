@@ -334,9 +334,12 @@ For valid daily incidents, each extracted event includes:
 | `deaths` | LLM extraction, then casualty sanity guardrails |
 | `injuries` | LLM extraction, then casualty sanity guardrails |
 | `vehicles_involved` | Canonical vehicle tokens such as bus, truck, car, motorcycle |
+| `road_name` | Specific road/highway/expressway name, normalized by backend road-name rules |
 | `summary` | Concise event summary |
 
 Only validated concrete events are passed to `insert_accident()` and linked to the source `article_id`.
+
+Road/highway names are normalized before insert and in the `/api/roads` aggregation path. The focused data-fix command `python3 scripts/fixes/normalize_road_names.py --apply` updates only existing `accidents.road_name` values that differ from the canonical backend format.
 
 ---
 
@@ -719,6 +722,7 @@ CREATE TABLE accidents (
     deaths            INTEGER DEFAULT 0,
     injuries          INTEGER DEFAULT 0,
     vehicles_involved TEXT,
+    road_name         TEXT,
     accident_date     DATE,
     summary           TEXT,
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

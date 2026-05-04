@@ -331,6 +331,7 @@ Full searchable table of every extracted accident with columns for date, type, l
 | `GET` | `/api/alerts/high-severity` | Recent high-severity alerts |
 | `GET` | `/api/export/csv` | CSV download (supports date/district filters) |
 | `POST` | `/api/scrape` | Trigger manual scrape (non-blocking; requires `x-admin-key`) |
+| `POST` | `/api/backfill-road-names` | Normalize existing `accidents.road_name` values (`?dry_run=true`, requires `x-admin-key`) |
 | `GET` | `/api/scrape-logs` | Recent scrape history |
 
 ---
@@ -342,10 +343,13 @@ Full searchable table of every extracted accident with columns for date, type, l
 2. **Extraction**: Each article is processed by the OpenAI LLM extractor with the article title, content, URL, and published date. The LLM first classifies the whole article as `daily_incident`, `time_window_roundup`, `non_incident_report`, `outside_bangladesh`, or `unknown`, then uses structured JSON output to identify:
    - **Accident type** (bus crash, hit-and-run, collision, etc.)
    - **Location** (maps to 64 districts + 10 divisions of Bangladesh)
+   - **Road/highway name** (backend-normalized before storage to avoid duplicate variants)
    - **Casualties** (death and injury counts from text)
    - **Vehicles involved** (bus, truck, motorcycle, etc.)
 
 3. **Storage**: Raw articles are stored in `articles`; only concrete daily accident events inside Bangladesh are inserted into `accidents`. `time_window_roundup` articles such as `13 killed in road accidents in 2 days`, non-incident/editorial/report-style articles, foreign accident articles/events classified as `outside_bangladesh`, empty/null events, and casualty outliers are skipped and logged to `data/non_incident_report.log`.
+
+Road/highway names are normalized by the backend before insert so variants such as `Dhaka-Sylhet Highway` and `Dhaka-Sylhet highway` are stored and grouped as one canonical value. Existing `accidents.road_name` values can be cleaned with `python3 scripts/fixes/normalize_road_names.py --apply`.
 
 4. **Analysis**: Backend computes forecasts, clusters, YoY comparisons, danger indices, and time patterns from the raw data
 
