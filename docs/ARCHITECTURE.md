@@ -200,6 +200,7 @@ All endpoints are mounted under the `/api` prefix via `APIRouter(prefix="/api")`
 | GET | `/api/youtube-videos` | YouTube search results (cached 30 min) | YouTubeNews |
 | GET | `/api/export/csv` | CSV download (supports date/district filters) | Layout (Export button) |
 | GET | `/api/scrape-logs?limit=N` | Scrape history (start time, articles found, status) | — |
+| POST | `/api/backfill-road-names?dry_run=true` | Normalize existing `accidents.road_name` values; requires `x-admin-key` | Admin/maintenance |
 | POST | `/api/scrape` | Trigger an on-demand scrape — **rate limited** (3 req/min/IP), non-blocking | Layout (Scrape Now button) |
 
 **How routes connect to data:**
@@ -383,6 +384,17 @@ Raw article text
 | `_generate_summary()` | First 5 sentences (skipping boilerplate like copyright notices, "follow us" prompts), capped at 200 characters | Short text summary |
 
 **Division name normalization:** The `_district_to_division()` method uses `_DIVISION_ALIASES` to handle variant spellings (e.g. "Chattogram" → "Chittagong", "Barishal" → "Barisal") so that all records use canonical division names regardless of which spelling appears in the article.
+
+**Road/highway name normalization:** The LLM extracts `road_name` as the specific road, highway, expressway, or bridge name when the article states one. Before insertion, `app.normalize_roads.normalize_road_name()` canonicalizes the value by normalizing dash/apostrophe variants, casing route suffixes such as `Highway` and `Road`, and applying known place aliases such as `Chittagong` → `Chattogram`, `Barisal` → `Barishal`, `Comilla` → `Cumilla`, `Bogra` → `Bogura`, and `Jessore` → `Jashore`. This keeps variants like `Dhaka-Sylhet Highway` and `Dhaka-Sylhet highway` stored as one `accidents.road_name` value.
+
+**Road-name backfill responsibilities:**
+
+| Component | Responsibility |
+|-----------|----------------|
+| `app/normalize_roads.py` | Shared canonicalization rules for future inserts, `/api/roads`, and backfills |
+| `app/backfill/road_names.py` | Reads existing `accidents.road_name` values, computes canonical replacements, and optionally updates only that column |
+| `scripts/fixes/normalize_road_names.py` | CLI wrapper for dry-run/apply maintenance runs |
+| `POST /api/backfill-road-names` | Admin API wrapper around the same backfill logic; defaults to dry-run |
 
 **Geo-coordinates:** The module contains a `DISTRICT_COORDINATES` dictionary mapping 80+ locations (all 64 districts plus major Dhaka sub-areas) to `(latitude, longitude)` tuples. These coordinates are used for map marker placement and heatmap rendering.
 
@@ -622,6 +634,7 @@ Stores structured data extracted from articles. One article can produce one acci
 | `deaths` | INTEGER | DEFAULT 0 | Number killed |
 | `injuries` | INTEGER | DEFAULT 0 | Number injured |
 | `vehicles_involved` | TEXT | — | Comma-separated vehicle list |
+| `road_name` | TEXT | — | Canonical named road/highway/expressway/bridge when stated |
 | `accident_date` | DATE | — | Date of accident |
 | `summary` | TEXT | — | Auto-generated 200-char summary |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation time |

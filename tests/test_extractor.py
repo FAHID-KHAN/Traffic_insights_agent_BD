@@ -457,7 +457,7 @@ class TestLLMNullHandling:
                             "deaths": 5,
                             "injuries": 12,
                             "vehicles_involved": ["bus", "truck"],
-                            "road_name": "Dhaka-Mymensingh Highway",
+                            "road_name": "Dhaka–Mymensingh highway",
                             "accident_date": None,
                             "summary": "A bus crashed into a truck in Gazipur, killing 5 and injuring 12.",
                             "confidence": 0.97,
@@ -478,6 +478,7 @@ class TestLLMNullHandling:
         assert len(rows) == 1
         assert rows[0]["district"] == "Gazipur"
         assert rows[0]["deaths"] == 5
+        assert rows[0]["road_name"] == "Dhaka-Mymensingh Highway"
         assert not log_path.exists()
 
     def test_keeps_valid_daily_multi_location_incidents(

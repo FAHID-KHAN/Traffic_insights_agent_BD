@@ -14,6 +14,8 @@ import requests
 from app.rate_limit import scrape_limiter
 from app import database as db
 from app.config import ADMIN_API_KEY
+from app.backfill.road_names import normalize_existing_road_names
+from app.normalize_roads import normalize_road_name
 from app.scraper import run_scraper, run_published_date_backfill
 from app.extractor import get_extraction_mode
 
@@ -274,6 +276,24 @@ async def backfill_published_dates(limit: int = Query(0, ge=0, le=5000), _=Depen
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Published date backfill failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/backfill-road-names")
+async def backfill_road_names(
+    dry_run: bool = Query(True, description="Preview changes without updating accidents.road_name"),
+    sample_limit: int = Query(20, ge=1, le=200),
+    _=Depends(verify_admin_key),
+):
+    """Normalize existing accidents.road_name values."""
+    try:
+        result = normalize_existing_road_names(
+            apply=not dry_run,
+            sample_limit=sample_limit,
+        )
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Road-name backfill failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1448,24 +1468,37 @@ async def get_road_analysis(
     """Dangerous roads/highways ranked by accident count and fatality rate."""
     with db.get_db() as conn:
         rows = conn.execute(
-            """SELECT road_name, COUNT(*) as accidents,
-                      COALESCE(SUM(deaths), 0) as deaths,
-                      COALESCE(SUM(injuries), 0) as injuries,
-                      COUNT(DISTINCT district) as districts_affected,
-                      ROUND(CAST(COALESCE(SUM(deaths), 0) AS REAL) / COUNT(*), 2) as fatality_rate,
-                      GROUP_CONCAT(DISTINCT district) as district_list
+            """SELECT road_name, deaths, injuries, district
                FROM accidents
-               WHERE road_name IS NOT NULL AND road_name != ''
-               GROUP BY road_name
-               HAVING COUNT(*) >= 1
-               ORDER BY accidents DESC, deaths DESC
-               LIMIT ?""",
-            (limit,),
+               WHERE road_name IS NOT NULL AND road_name != ''"""
         ).fetchall()
 
-        result = []
+        grouped: dict[str, dict] = {}
         for r in rows:
-            d = dict(r)
+            road_name = normalize_road_name(r["road_name"])
+            if not road_name:
+                continue
+            if road_name not in grouped:
+                grouped[road_name] = {
+                    "road_name": road_name,
+                    "accidents": 0,
+                    "deaths": 0,
+                    "injuries": 0,
+                    "_districts": set(),
+                }
+            item = grouped[road_name]
+            item["accidents"] += 1
+            item["deaths"] += r["deaths"] or 0
+            item["injuries"] += r["injuries"] or 0
+            if r["district"]:
+                item["_districts"].add(r["district"])
+
+        result = []
+        for d in grouped.values():
+            d["districts_affected"] = len(d["_districts"])
+            d["fatality_rate"] = round(d["deaths"] / d["accidents"], 2) if d["accidents"] else 0
+            d["district_list"] = sorted(d["_districts"])
+            d.pop("_districts", None)
             fr = d["fatality_rate"]
             if fr >= 1.5:
                 d["severity"] = "critical"
@@ -1475,9 +1508,9 @@ async def get_road_analysis(
                 d["severity"] = "moderate"
             else:
                 d["severity"] = "low"
-            d["district_list"] = d["district_list"].split(",") if d["district_list"] else []
             result.append(d)
-        return result
+        result.sort(key=lambda d: (-d["accidents"], -d["deaths"], d["road_name"]))
+        return result[:limit]
 
 
 # ─── Geographic Blackspot Detection (DBSCAN) ───────────────────

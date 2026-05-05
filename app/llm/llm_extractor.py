@@ -17,6 +17,7 @@ from app.llm.fake_data import NON_INCIDENT_PHRASES
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
 from app.llm.openai_client import OpenAIClient, OpenAIClientError
 from app.normalize import normalize_district
+from app.normalize_roads import normalize_road_name
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,9 @@ _SYSTEM_PROMPT = (
     "Do not invent facts. If a field is not stated, use null (or 0 for counts). "
     "If multiple accidents are described, return multiple entries. "
     "For road_name, extract the specific highway or road name if mentioned "
-    "(e.g. 'Dhaka-Chittagong Highway', 'N1', 'Dhaka-Mymensingh Highway'). Use null if not stated."
+    "(e.g. 'Dhaka-Chattogram Highway', 'N1', 'Dhaka-Mymensingh Highway'). "
+    "Use canonical Title Case, normalize known spelling variants such as Chittagong to Chattogram, "
+    "and use null if no specific road or highway is stated."
 )
 
 _NON_DISTRICT_LOCATIONS = {
@@ -278,6 +281,7 @@ class LLMAccidentExtractor:
             # Canonical accident date is the article publish date for consistent daily/monthly grouping.
             accident_dt = published_date
             vehicles = ", ".join(event.vehicles_involved) if event.vehicles_involved else None
+            road_name = normalize_road_name(event.road_name)
 
             accident_id = insert_accident(
                 article_id=article_id,
@@ -290,7 +294,7 @@ class LLMAccidentExtractor:
                 deaths=event.deaths,
                 injuries=event.injuries,
                 vehicles_involved=vehicles,
-                road_name=event.road_name,
+                road_name=road_name,
                 accident_date=accident_dt,
                 summary=event.summary,
             )
@@ -330,6 +334,7 @@ class LLMAccidentExtractor:
             "\"accidents\":[{\"accident_type\":string|null,\"location_raw\":string|null,"
             "\"district\":string|null,\"division\":string|null,\"deaths\":int,"
             "\"injuries\":int,\"vehicles_involved\":string[]|null,"
+            "\"road_name\":string|null,"
             "\"accident_date\":\"YYYY-MM-DD\"|null,\"summary\":string|null,"
             "\"confidence\":float|null}]}\n\n"
             "Rules:\n"
@@ -354,6 +359,8 @@ class LLMAccidentExtractor:
             "- district must be one from allowed list or null.\n"
             "- Do not output locality names (e.g., Uttara, Mirpur, Tongi) as district.\n"
             "- Never generate latitude/longitude. Coordinates are handled by backend mapping.\n"
+            "- road_name must be the specific road/highway/expressway/bridge name only, in canonical Title Case. "
+            "Use standard spellings such as Chattogram, Barishal, Cumilla, Bogura, and Jashore.\n"
             "- Return only concrete accident incidents, not annual/monthly aggregate statistics.\n"
             "- If multiple accidents are described, return multiple entries.\n"
             "- Do not invent counts; if unclear use 0.\n"

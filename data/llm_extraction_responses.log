@@ -1945,3 +1945,57 @@ raw_response={"article_type":"non_incident_report","skip_reason":"Article is abo
 [2026-04-29T02:38:46.504184] article_id=649
 raw_response={"article_type":"non_incident_report","skip_reason":"Article discusses EU election observation report and recommendations; no road-accident incidents described.","accidents":[]}
 --------------------------------------------------------------------------------
+[2026-05-03T19:59:40.582090] article_id=650
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"truck hit motorcycle","location_raw":"Benipur area, Nachole upazila, Chapainawabganj","district":"Chapainawabganj","division":null,"deaths":2,"injuries":0,"vehicles_involved":["truck","motorcycle"],"road_name":null,"accident_date":null,"summary":"A truck hit a motorcycle in Benipur, Nachole (Chapainawabganj) around 5:45am, killing two riders after they were taken to hospital.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-03T19:59:45.833713] article_id=651
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"Head-on collision","location_raw":"Telibazar area, South Surma upazila, Sylhet","district":"Sylhet","division":"Sylhet","deaths":8,"injuries":7,"vehicles_involved":["truck","pickup"],"road_name":"Dhaka-Sylhet Highway","accident_date":null,"summary":"Truck and pickup van collided head-on in Telibazar on Dhaka-Sylhet Highway; 8 construction workers killed and 7 injured.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-03T19:59:53.506630] article_id=652
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"bus hit pedestrian","location_raw":"In front of PTI School, Magura town","district":"Magura","division":null,"deaths":1,"injuries":0,"vehicles_involved":["bus"],"road_name":null,"accident_date":null,"summary":"A passenger bus crushed a 75-year-old man while he was crossing the road in Magura town.","confidence":0.86},{"accident_type":"head-on collision","location_raw":"Purbadhola upazila, Netrokona","district":"Netrokona","division":null,"deaths":2,"injuries":1,"vehicles_involved":["bus","auto-rickshaw"],"road_name":null,"accident_date":null,"summary":"A bus and a CNG-run auto-rickshaw collided head-on in Purbadhola; two died and one was injured.","confidence":0.84},{"accident_type":"rear-end collision","location_raw":"Tipordi area, Sonargaon upazila, on the Dhaka-Chattogram Highway","district":"Narayanganj","division":null,"deaths":2,"injuries":0,"vehicles_involved":["truck"],"road_name":"Dhaka-Chattogram Highway","accident_date":null,"summary":"A pineapple-laden mini truck hit another vehicle from behind in Sonargaon; two people were killed.","confidence":0.78}]}
+--------------------------------------------------------------------------------
+[2026-05-03T19:59:59.447327] article_id=653
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"collision","location_raw":"Bansher Tal area, Nageshwari upazila, Kurigram","district":"Kurigram","division":null,"deaths":3,"injuries":11,"vehicles_involved":["truck","microbus"],"road_name":null,"accident_date":null,"summary":"Truck collided with a microbus in Bansher Tal area of Nageshwari, Kurigram, killing 3 and injuring at least 11.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-03T20:00:04.256757] article_id=654
+raw_response={"article_type":"non_incident_report","skip_reason":"Article discusses parliamentary engagement and Bangladesh’s LDC graduation transition; no road-accident incidents described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-03T20:00:08.446909] article_id=655
+raw_response={"article_type":"non_incident_report","skip_reason":"Editorial/opinion about political activities on university campuses; no road-accident incident described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-03T20:00:12.952611] article_id=656
+raw_response={"article_type":"non_incident_report","skip_reason":"Editorial/opinion piece on political stability, governance, economy and security; no specific road-accident incidents described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-03T20:00:17.555255] article_id=657
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is an opinion/analysis piece about migrant workers in Muslim countries; it contains no concrete road-accident incident details.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-03T20:00:22.164977] article_id=658
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is about a shooting investigation at a Washington media gala; no road-accident incident is described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:37:42.383017] article_id=659
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"truck crashed into auto-rickshaw","location_raw":"Montalat Samitighar, Muktagachha upazila, Mymensingh district","district":"Mymensingh","division":null,"deaths":4,"injuries":2,"vehicles_involved":["truck","auto-rickshaw"],"road_name":null,"accident_date":null,"summary":"A sand-laden truck hit a CNG auto-rickshaw in Muktagachha, Mymensingh, killing 4 passengers and injuring 2.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:37:48.099108] article_id=660
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"collision","location_raw":"Ravna bypass area, Ravna flyover, Dhaka-Tangail highway","district":"Tangail","division":null,"deaths":2,"injuries":2,"vehicles_involved":["truck","pickup"],"road_name":"Dhaka-Tangail Highway","accident_date":null,"summary":"Truck collided with a pickup van at Ravna bypass/flyover on Dhaka-Tangail Highway, killing 2 and injuring 2.","confidence":0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:37:53.207562] article_id=661
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"head-on collision","location_raw":"Telibazar area, South Surma upazila, Sylhet","district":"Sylhet","division":"Sylhet","deaths":9,"injuries":12,"vehicles_involved":["truck","pickup"],"road_name":"Dhaka-Sylhet Highway","accident_date":null,"summary":"Truck and pickup head-on collision on Dhaka-Sylhet Highway in Telibazar, South Surma left 9 dead and 10-12 injured.","confidence":0.78}]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:00.349588] article_id=662
+raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"head-on collision","location_raw":"Telibazar area under Dakshin Surma police station, Sylhet Metropolitan Police, Dakshin Surma, Sylhet","district":"Sylhet","division":"Sylhet","deaths":8,"injuries":9,"vehicles_involved":["truck","pickup"],"road_name":"Dhaka-Sylhet Highway","accident_date":null,"summary":"A speeding truck collided head-on with a pickup on the Dhaka-Sylhet Highway in Telibazar, Dakshin Surma, killing 8 and injuring 9 construction workers.","confidence":0.92}]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:04.771995] article_id=663
+raw_response={"article_type":"non_incident_report","skip_reason":"Sports article about Arsenal and Bukayo Saka; no road-accident incidents described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:09.452195] article_id=664
+raw_response={"article_type":"non_incident_report","skip_reason":"Article describes an alleged gang rape and police action; no road-accident event is reported.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:13.831528] article_id=665
+raw_response={"article_type":"non_incident_report","skip_reason":"Policy announcement about installing CCTV cameras on national highways; no specific road-accident incident described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:17.971754] article_id=666
+raw_response={"article_type":"non_incident_report","skip_reason":"Article is about allocation of stadiums to Bangladesh Football Federation; no road-accident incident described.","accidents":[]}
+--------------------------------------------------------------------------------
+[2026-05-04T14:38:23.091074] article_id=667
+raw_response={"article_type":"non_incident_report","skip_reason":"Sports match report (La Liga: Real Madrid vs Espanyol); no road-accident events described.","accidents":[]}
+--------------------------------------------------------------------------------
