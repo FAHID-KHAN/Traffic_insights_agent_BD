@@ -274,6 +274,11 @@ class TestLLMNullHandling:
     def test_logs_casualty_outlier_without_insert(self, sample_article_id, tmp_path, monkeypatch):
         log_path = tmp_path / "non_incident_report.log"
         monkeypatch.setattr(llm_extractor_module, "_DISCARD_LOG_PATH", log_path)
+        monkeypatch.setattr(
+            llm_extractor_module,
+            "upsert_accident_event",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("dedupe should not run")),
+        )
         extractor = LLMAccidentExtractor(
             client=_FakeLLMClient(
                 {
