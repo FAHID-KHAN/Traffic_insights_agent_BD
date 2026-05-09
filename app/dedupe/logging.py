@@ -11,8 +11,10 @@ from app.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-UPDATE_LOG_PATH = Path(DATA_DIR) / "accident_update_events.log"
-AMBIGUITY_LOG_PATH = Path(DATA_DIR) / "accident_dedupe_ambiguity.log"
+DEDUPE_LOG_DIR = Path(DATA_DIR) / "dedupe"
+UPDATE_LOG_PATH = DEDUPE_LOG_DIR / "accident_update_events.log"
+AMBIGUITY_LOG_PATH = DEDUPE_LOG_DIR / "accident_dedupe_ambiguity.log"
+DECISION_LOG_PATH = DEDUPE_LOG_DIR / "accident_dedupe_decisions.log"
 
 
 def write_update_log(payload: dict[str, Any]) -> None:
@@ -21,6 +23,10 @@ def write_update_log(payload: dict[str, Any]) -> None:
 
 def write_ambiguity_log(payload: dict[str, Any]) -> None:
     _write_jsonl(AMBIGUITY_LOG_PATH, payload)
+
+
+def write_decision_log(payload: dict[str, Any]) -> None:
+    _write_jsonl(DECISION_LOG_PATH, payload)
 
 
 def _write_jsonl(path: Path, payload: dict[str, Any]) -> None:

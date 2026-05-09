@@ -1,11 +1,11 @@
 """Event-level accident duplicate handling."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.database import get_db, insert_accident
-from app.dedupe.logging import write_ambiguity_log, write_update_log
+from app.dedupe.logging import write_ambiguity_log, write_decision_log, write_update_log
 from app.dedupe.similarity import has_update_wording, score_accident_similarity
 from app.geo import DISTRICT_COORDINATES, district_to_division
 from app.llm.llm_schema import AccidentEvent
@@ -14,7 +14,7 @@ from app.normalize_roads import normalize_road_name
 
 HIGH_CONFIDENCE_THRESHOLD = 75
 AMBIGUOUS_THRESHOLD = 50
-CANDIDATE_LOOKBACK_DAYS = 3
+CANDIDATE_WINDOW_DAYS = 3
 NON_DISTRICT_LOCATIONS = {
     "Tongi", "Savar", "Keraniganj", "Uttara", "Mirpur", "Mohammadpur",
     "Dhanmondi", "Gulshan", "Motijheel", "Jatrabari", "Demra", "Tejgaon",
@@ -41,15 +41,42 @@ def upsert_accident_event(
 
     if best and best["score"] >= AMBIGUOUS_THRESHOLD:
         write_ambiguity_log(
-            {
-                "reason": "ambiguous_possible_duplicate",
-                "score": best["score"],
-                "new_article_id": article_id,
-                "inserted_accident_id": accident_id,
-                "best_candidate_id": best["candidate"]["id"],
-                "matched_signals": best["matched_signals"],
-                "event_snapshot": _event_snapshot(new_event, title, url),
-            }
+            _dedupe_payload(
+                decision="inserted_ambiguous_possible_duplicate",
+                score=best["score"],
+                matched_signals=best["matched_signals"],
+                current_article=_current_article_snapshot(article_id, new_event, title, url),
+                current_event=_event_snapshot(new_event),
+                existing_candidate=_candidate_snapshot(best["candidate"]),
+                insert_result={"accident_id": accident_id},
+            )
+        )
+    elif best:
+        write_decision_log(
+            _dedupe_payload(
+                decision="inserted_low_confidence",
+                score=best["score"],
+                matched_signals=best["matched_signals"],
+                current_article=_current_article_snapshot(article_id, new_event, title, url),
+                current_event=_event_snapshot(new_event),
+                existing_candidate=_candidate_snapshot(best["candidate"]),
+                insert_result={"accident_id": accident_id},
+            )
+        )
+    else:
+        decision = "inserted_no_same_district_candidate"
+        if not new_event.get("district"):
+            decision = "inserted_dedupe_skipped_missing_district"
+        write_decision_log(
+            _dedupe_payload(
+                decision=decision,
+                score=None,
+                matched_signals=[],
+                current_article=_current_article_snapshot(article_id, new_event, title, url),
+                current_event=_event_snapshot(new_event),
+                existing_candidate=None,
+                insert_result={"accident_id": accident_id},
+            )
         )
 
     return accident_id
@@ -62,7 +89,7 @@ def find_candidate_scores(
 ) -> list[dict[str, Any]]:
     """Return candidate scores for reporting without mutating the database."""
     new_event = _normalize_event(article_id=0, event=event, published_date=published_date)
-    candidates = _candidate_accidents(new_event.get("accident_date"))
+    candidates = _candidate_accidents(new_event.get("accident_date"), new_event.get("district"))
     scored = []
     for candidate in candidates:
         result = score_accident_similarity(new_event, candidate, title=title)
@@ -104,7 +131,7 @@ def _normalize_event(article_id: int, event: AccidentEvent, published_date: date
 
 
 def _find_best_candidate(new_event: dict[str, Any], title: str | None) -> dict[str, Any] | None:
-    candidates = _candidate_accidents(new_event.get("accident_date"))
+    candidates = _candidate_accidents(new_event.get("accident_date"), new_event.get("district"))
     best: dict[str, Any] | None = None
 
     for candidate in candidates:
@@ -120,19 +147,25 @@ def _find_best_candidate(new_event: dict[str, Any], title: str | None) -> dict[s
     return best
 
 
-def _candidate_accidents(accident_date: date | None) -> list[dict[str, Any]]:
-    if accident_date is None:
+def _candidate_accidents(accident_date: date | None, district: str | None) -> list[dict[str, Any]]:
+    if accident_date is None or not district:
         return []
-    start_date = accident_date - timedelta(days=CANDIDATE_LOOKBACK_DAYS)
+    start_date = accident_date - timedelta(days=CANDIDATE_WINDOW_DAYS)
+    end_date = accident_date + timedelta(days=CANDIDATE_WINDOW_DAYS)
     with get_db() as conn:
         rows = conn.execute(
-            """SELECT id, article_id, accident_type, location_raw, district, division,
-                      latitude, longitude, deaths, injuries, vehicles_involved,
-                      road_name, accident_date, summary
-               FROM accidents
-               WHERE accident_date BETWEEN ? AND ?
-               ORDER BY accident_date DESC, id DESC""",
-            (start_date, accident_date),
+            """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                      a.district, a.division, a.latitude, a.longitude,
+                      a.deaths, a.injuries, a.vehicles_involved,
+                      a.road_name, a.accident_date, a.summary,
+                      ar.title AS article_title, ar.url AS article_url,
+                      ar.published_date AS article_published_date
+               FROM accidents a
+               JOIN articles ar ON ar.id = a.article_id
+               WHERE a.district = ?
+                 AND a.accident_date BETWEEN ? AND ?
+               ORDER BY a.accident_date DESC, a.id DESC""",
+            (district, start_date, end_date),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -146,36 +179,46 @@ def _update_existing_accident(
 ) -> int:
     candidate = best["candidate"]
     existing_id = candidate["id"]
+    existing_date = _coerce_date(candidate.get("accident_date"))
+    new_date = _coerce_date(new_event.get("accident_date"))
+    final_date = _earliest_date(existing_date, new_date)
     before = {
         "deaths": int(candidate.get("deaths") or 0),
         "injuries": int(candidate.get("injuries") or 0),
+        "accident_date": candidate.get("accident_date"),
+        "summary": candidate.get("summary"),
     }
     after = {
         "deaths": max(before["deaths"], int(new_event.get("deaths") or 0)),
         "injuries": max(before["injuries"], int(new_event.get("injuries") or 0)),
+        "accident_date": final_date,
     }
     summary = _choose_summary(candidate, new_event, after, title)
+    after["summary"] = summary
 
     with get_db() as conn:
         conn.execute(
             """UPDATE accidents
-               SET deaths = ?, injuries = ?, summary = ?
+               SET deaths = ?, injuries = ?, accident_date = ?, summary = ?
                WHERE id = ?""",
-            (after["deaths"], after["injuries"], summary, existing_id),
+            (after["deaths"], after["injuries"], final_date, summary, existing_id),
         )
 
     write_update_log(
-        {
-            "reason": "high_confidence_duplicate_update",
-            "score": best["score"],
-            "existing_accident_id": existing_id,
-            "new_article_id": article_id,
-            "kept_accident_date": candidate.get("accident_date"),
-            "before": before,
-            "after": after,
-            "matched_signals": best["matched_signals"],
-            "event_snapshot": _event_snapshot(new_event, title, url),
-        }
+        _dedupe_payload(
+            decision="updated_existing",
+            score=best["score"],
+            matched_signals=best["matched_signals"],
+            current_article=_current_article_snapshot(article_id, new_event, title, url),
+            current_event=_event_snapshot(new_event),
+            existing_candidate=_candidate_snapshot(candidate),
+            merge_result={
+                "accident_id": existing_id,
+                "before": before,
+                "after": after,
+                "summary_changed": summary != before["summary"],
+            },
+        )
     )
     return existing_id
 
@@ -183,34 +226,125 @@ def _update_existing_accident(
 def _choose_summary(
     candidate: dict[str, Any],
     new_event: dict[str, Any],
-    after: dict[str, int],
+    after: dict[str, Any],
     title: str | None,
 ) -> str | None:
     new_summary = new_event.get("summary")
     old_summary = candidate.get("summary")
     if not new_summary:
         return old_summary
-    new_has_higher_casualties = after != {
+    new_casualties = {
+        "deaths": int(new_event.get("deaths") or 0),
+        "injuries": int(new_event.get("injuries") or 0),
+    }
+    old_casualties = {
         "deaths": int(candidate.get("deaths") or 0),
         "injuries": int(candidate.get("injuries") or 0),
     }
-    if new_has_higher_casualties or has_update_wording(title, new_summary):
+    new_has_higher_casualties = (
+        new_casualties["deaths"] > old_casualties["deaths"]
+        or new_casualties["injuries"] > old_casualties["injuries"]
+    )
+    new_has_same_casualties = new_casualties == old_casualties
+    if new_has_higher_casualties or (new_has_same_casualties and has_update_wording(title, new_summary)):
         return new_summary
     return old_summary
 
 
-def _event_snapshot(new_event: dict[str, Any], title: str | None, url: str | None) -> dict[str, Any]:
+def _coerce_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.strptime(value[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def _earliest_date(*values: date | None) -> date | None:
+    dates = [value for value in values if value is not None]
+    return min(dates) if dates else None
+
+
+def _casualties_snapshot(event: dict[str, Any]) -> dict[str, int]:
     return {
+        "deaths": int(event.get("deaths") or 0),
+        "injuries": int(event.get("injuries") or 0),
+    }
+
+
+def _current_article_snapshot(
+    article_id: int,
+    new_event: dict[str, Any],
+    title: str | None,
+    url: str | None,
+) -> dict[str, Any]:
+    return {
+        "article_id": article_id,
+        "published_date": new_event.get("accident_date"),
         "title": title,
         "url": url,
+    }
+
+
+def _event_snapshot(new_event: dict[str, Any]) -> dict[str, Any]:
+    return {
         "accident_type": new_event.get("accident_type"),
         "location_raw": new_event.get("location_raw"),
         "district": new_event.get("district"),
         "division": new_event.get("division"),
-        "deaths": new_event.get("deaths"),
-        "injuries": new_event.get("injuries"),
+        "casualties": _casualties_snapshot(new_event),
         "vehicles_involved": new_event.get("vehicles_involved"),
         "road_name": new_event.get("road_name"),
         "accident_date": new_event.get("accident_date"),
         "summary": new_event.get("summary"),
     }
+
+
+def _candidate_snapshot(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not candidate:
+        return None
+    return {
+        "accident_id": candidate.get("id"),
+        "article": {
+            "article_id": candidate.get("article_id"),
+            "published_date": candidate.get("article_published_date"),
+            "title": candidate.get("article_title"),
+            "url": candidate.get("article_url"),
+        },
+        "accident_type": candidate.get("accident_type"),
+        "location_raw": candidate.get("location_raw"),
+        "district": candidate.get("district"),
+        "division": candidate.get("division"),
+        "casualties": _casualties_snapshot(candidate),
+        "vehicles_involved": candidate.get("vehicles_involved"),
+        "road_name": candidate.get("road_name"),
+        "accident_date": candidate.get("accident_date"),
+        "summary": candidate.get("summary"),
+    }
+
+
+def _dedupe_payload(
+    decision: str,
+    score: int | None,
+    matched_signals: list[str],
+    current_article: dict[str, Any],
+    current_event: dict[str, Any],
+    existing_candidate: dict[str, Any] | None,
+    merge_result: dict[str, Any] | None = None,
+    insert_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "decision": decision,
+        "score": score,
+        "matched_signals": matched_signals,
+        "current_article": current_article,
+        "current_event": current_event,
+        "existing_candidate": existing_candidate,
+    }
+    if merge_result is not None:
+        payload["merge_result"] = merge_result
+    if insert_result is not None:
+        payload["insert_result"] = insert_result
+    return payload
