@@ -42,7 +42,7 @@ export default function LiveNews({ limit = 12 }) {
       {articles.length === 0 ? (
         <div className="empty-state">
           <FaExclamationCircle />
-          <p>No articles found. Try scraping first.</p>
+          <p>No articles found. Try scanning first.</p>
         </div>
       ) : (
         <ul className="news-list">

@@ -283,3 +283,36 @@ raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"
 [2026-05-12T12:00:04.354059] article_id=95
 raw_response={"article_type":"daily_incident","skip_reason":null,"accidents":[{"accident_type":"truck hit motorcycle","location_raw":"Shanir Akhra in Jatrabari area, Dhaka","district":"Dhaka","division":null,"deaths":2,"injuries":0,"vehicles_involved":["truck","motorcycle"],"road_name":null,"accident_date":null,"accident_time":"23:00","part_of_day":"night","summary":"A truck hit a motorcycle in Shanir Akhra, Jatrabari, Dhaka around 23:00, killing two motorcyclists.","confidence":0.9}]}
 --------------------------------------------------------------------------------
+[2026-05-12T15:57:57.648279] article_id=39
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": null, "location_raw": null, "district": null, "division": null, "deaths": 0, "injuries": 0, "vehicles_involved": null, "road_name": null, "accident_date": null, "summary": "Report provides June road-accident totals; no specific incident described.", "confidence": 0.92}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.654495] article_id=40
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": null, "location_raw": null, "district": null, "division": null, "deaths": 0, "injuries": 0, "vehicles_involved": null, "road_name": null, "accident_date": null, "summary": null, "confidence": 0.51}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.659765] article_id=41
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "road accident", "location_raw": "Dhaka", "district": "Dhaka", "division": "Dhaka", "deaths": 999, "injuries": 0, "vehicles_involved": ["bus"], "road_name": null, "accident_date": null, "summary": "A report-like payload with unrealistic casualty count.", "confidence": 0.8}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.664556] article_id=42
+raw_response={"article_type": "time_window_roundup", "skip_reason": "Title says the article summarizes road accidents over two days.", "accidents": []}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.669919] article_id=43
+raw_response={"article_type": "outside_bangladesh", "skip_reason": "The crash happened in Jakarta, Indonesia, not Bangladesh.", "accidents": []}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.675344] article_id=44
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "bus crash", "location_raw": "Jakarta, Indonesia", "district": null, "division": null, "deaths": 12, "injuries": 5, "vehicles_involved": ["bus"], "road_name": null, "accident_date": null, "summary": "A bus crash in Jakarta, Indonesia killed 12 people.", "confidence": 0.95}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.680841] article_id=45
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "bus crash", "location_raw": "Dhaka-Mymensingh highway, Gazipur", "district": "Gazipur", "division": "Dhaka", "deaths": 5, "injuries": 12, "vehicles_involved": ["bus", "truck"], "road_name": "Dhaka\u2013Mymensingh highway", "accident_date": null, "summary": "A bus crashed into a truck in Gazipur, killing 5 and injuring 12.", "confidence": 0.97}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.694662] article_id=47
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "truck crash", "location_raw": "Tangail", "district": "Tangail", "division": "Dhaka", "deaths": 1, "injuries": 0, "vehicles_involved": ["truck"], "road_name": null, "accident_date": null, "accident_time": null, "part_of_day": "early morning", "summary": "A truck crash in Tangail killed one.", "confidence": 0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.702052] article_id=48
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "road crash", "location_raw": "Dhaka", "district": "Dhaka", "division": "Dhaka", "deaths": 1, "injuries": 0, "vehicles_involved": ["bus"], "road_name": null, "accident_date": null, "accident_time": null, "part_of_day": null, "summary": "A road crash in Dhaka killed one.", "confidence": 0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.708740] article_id=49
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "road crash", "location_raw": "Dhaka", "district": "Dhaka", "division": "Dhaka", "deaths": 1, "injuries": 1, "vehicles_involved": ["bus"], "road_name": null, "accident_date": null, "accident_time": null, "part_of_day": null, "summary": "Police arrived at 4:00 pm and the victim died at hospital at 6:00 pm.", "confidence": 0.9}]}
+--------------------------------------------------------------------------------
+[2026-05-12T15:57:57.716341] article_id=50
+raw_response={"article_type": "daily_incident", "skip_reason": null, "accidents": [{"accident_type": "truck crash", "location_raw": "Cumilla", "district": "Cumilla", "division": "Chittagong", "deaths": 7, "injuries": 6, "vehicles_involved": ["truck"], "road_name": null, "accident_date": null, "summary": "A truck plunged into a ditch in Cumilla, killing 7 and injuring 6.", "confidence": 0.94}, {"accident_type": "road accident", "location_raw": "Gazipur", "district": "Gazipur", "division": "Dhaka", "deaths": 2, "injuries": 1, "vehicles_involved": ["bus"], "road_name": null, "accident_date": null, "summary": "A bus accident in Gazipur killed 2 people and injured 1.", "confidence": 0.91}]}
+--------------------------------------------------------------------------------

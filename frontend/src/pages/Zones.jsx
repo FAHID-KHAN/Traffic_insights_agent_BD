@@ -97,7 +97,7 @@ export default function Zones() {
       {sorted.length === 0 ? (
         <div className="empty-state">
           <FaMapMarkerAlt />
-          <p>No danger zone data yet. Run a scrape first!</p>
+          <p>No danger zone data yet. Run a scan first!</p>
         </div>
       ) : view === 'index' ? (
         /* ── Risk Index View ── */

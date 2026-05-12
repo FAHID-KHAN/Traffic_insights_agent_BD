@@ -2,15 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, formatDate, COLORS } from '../utils/api';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
-import { FaChartArea, FaChartPie, FaChartBar } from 'react-icons/fa';
+import { FaChartArea, FaChartPie, FaChartBar, FaCar } from 'react-icons/fa';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const VEHICLE_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#a855f7', '#ec4899', '#6366f1',
+];
 
 export default function Monthly() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState(null);
+  const [vehicleData, setVehicleData] = useState(null);
 
   const years = [];
   for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) years.push(y);
@@ -18,8 +24,40 @@ export default function Monthly() {
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     try {
-      const d = await api(`/monthly?year=${year}&month=${month}`);
+      // Compute first and last day of the selected month for vehicle filtering
+      const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
+
+      const [d, vehicles] = await Promise.all([
+        api(`/monthly?year=${year}&month=${month}`),
+        api(`/vehicle-analytics?start=${firstDay}&end=${lastDay}`),
+      ]);
       setData(d);
+
+      if (vehicles?.length > 0) {
+        const top = vehicles.slice(0, 8);
+        setVehicleData({
+          labels: top.map(v => v.vehicle),
+          datasets: [
+            {
+              label: 'Accidents',
+              data: top.map(v => v.accidents),
+              backgroundColor: VEHICLE_COLORS.map(c => c + 'cc'),
+              borderColor: VEHICLE_COLORS,
+              borderWidth: 1,
+            },
+            {
+              label: 'Deaths',
+              data: top.map(v => v.deaths),
+              backgroundColor: '#ef444433',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+            },
+          ],
+        });
+      } else {
+        setVehicleData(null);
+      }
     } catch (err) {
       console.error('Monthly stats error:', err);
     }
@@ -80,6 +118,18 @@ export default function Monthly() {
         <ChartCard title="Daily Breakdown" icon={<FaChartArea />} type="bar" data={dailyChart} fullWidth options={{ plugins: { legend: { labels: { boxWidth: 12 } } } }} />
         <ChartCard title="Accident Types" icon={<FaChartPie />} type="doughnut" data={typeChart} options={{ plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } }} />
         <ChartCard title="By District" icon={<FaChartBar />} type="bar" data={districtChart} options={{ indexAxis: 'y', plugins: { legend: { display: false } } }} />
+        <ChartCard
+          title="Vehicles Involved"
+          icon={<FaCar />}
+          type="bar"
+          data={vehicleData}
+          fullWidth
+          options={{
+            indexAxis: 'y',
+            plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+            scales: { x: { beginAtZero: true } },
+          }}
+        />
       </div>
     </>
   );

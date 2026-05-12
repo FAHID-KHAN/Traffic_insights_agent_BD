@@ -5,12 +5,16 @@ import {
   FaBalanceScale, FaArrowUp, FaArrowDown, FaMinus,
   FaChartBar, FaChartLine, FaExchangeAlt, FaCalendarAlt,
   FaSkullCrossbones, FaCarCrash, FaUserInjured, FaHeartbeat,
+  FaCar, FaClock,
 } from 'react-icons/fa';
 
 const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
+
+const PART_ORDER = ['midnight','dawn','morning','noon','afternoon','evening','night'];
+const PART_EMOJI  = { midnight:'🌑', dawn:'🌅', morning:'☀️', noon:'🌞', afternoon:'🌤️', evening:'🌆', night:'🌙' };
 
 function Delta({ val, inverse }) {
   if (val === 0) return <span className="delta neutral"><FaMinus /> 0%</span>;
@@ -24,10 +28,10 @@ function Delta({ val, inverse }) {
 }
 
 const CARD_META = [
-  { key: 'accidents', label: 'Accidents', icon: <FaCarCrash />, color: 'var(--accent-blue)', colorClass: '' },
-  { key: 'deaths', label: 'Deaths', icon: <FaSkullCrossbones />, color: 'var(--accent-red)', colorClass: 'text-red' },
-  { key: 'injuries', label: 'Injuries', icon: <FaUserInjured />, color: 'var(--accent-orange)', colorClass: 'text-orange' },
-  { key: 'fr', label: 'Fatality Rate', icon: <FaHeartbeat />, color: 'var(--accent-purple)', colorClass: 'text-purple' },
+  { key: 'accidents', label: 'Accidents',    icon: <FaCarCrash />,      color: 'var(--accent-blue)',   colorClass: '' },
+  { key: 'deaths',    label: 'Deaths',       icon: <FaSkullCrossbones />,color: 'var(--accent-red)',    colorClass: 'text-red' },
+  { key: 'injuries',  label: 'Injuries',     icon: <FaUserInjured />,   color: 'var(--accent-orange)', colorClass: 'text-orange' },
+  { key: 'fr',        label: 'Fatality Rate',icon: <FaHeartbeat />,     color: 'var(--accent-purple)', colorClass: 'text-purple' },
 ];
 
 export default function Compare() {
@@ -37,24 +41,108 @@ export default function Compare() {
   const [year1, setYear1] = useState(now.getFullYear() - 1);
   const [year2, setYear2] = useState(now.getFullYear());
   const [data, setData] = useState(null);
+  const [vehicleChart, setVehicleChart] = useState(null);
+  const [timeChart, setTimeChart] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Compute start/end for a given year in the selected mode
+  const getRange = useCallback((yr) => {
+    if (mode === 'monthly') {
+      const firstDay = `${yr}-${String(month).padStart(2, '0')}-01`;
+      const lastDay  = new Date(yr, month, 0).toISOString().split('T')[0];
+      return { start: firstDay, end: lastDay };
+    }
+    return { start: `${yr}-01-01`, end: `${yr}-12-31` };
+  }, [mode, month]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (mode === 'monthly') {
-        const d = await api(`/compare/monthly?month=${month}&year1=${year1}&year2=${year2}`);
-        setData(d);
+      const r1 = getRange(year1);
+      const r2 = getRange(year2);
+
+      const [mainData, v1, v2, t1, t2] = await Promise.all([
+        mode === 'monthly'
+          ? api(`/compare/monthly?month=${month}&year1=${year1}&year2=${year2}`)
+          : api(`/compare/yearly?year1=${year1}&year2=${year2}`),
+        api(`/vehicle-analytics?start=${r1.start}&end=${r1.end}`),
+        api(`/vehicle-analytics?start=${r2.start}&end=${r2.end}`),
+        api(`/time-patterns?start=${r1.start}&end=${r1.end}`),
+        api(`/time-patterns?start=${r2.start}&end=${r2.end}`),
+      ]);
+
+      setData(mainData);
+
+      // ── Vehicle comparison chart ──
+      if (v1?.length || v2?.length) {
+        const allVehicles = [...new Set([
+          ...(v1 || []).slice(0, 6).map(v => v.vehicle),
+          ...(v2 || []).slice(0, 6).map(v => v.vehicle),
+        ])].slice(0, 8);
+        const vm1 = Object.fromEntries((v1 || []).map(v => [v.vehicle, v]));
+        const vm2 = Object.fromEntries((v2 || []).map(v => [v.vehicle, v]));
+        setVehicleChart({
+          labels: allVehicles,
+          datasets: [
+            {
+              label: String(year1),
+              data: allVehicles.map(v => vm1[v]?.accidents || 0),
+              backgroundColor: COLORS[0] + '99',
+              borderColor: COLORS[0],
+              borderWidth: 1,
+              borderRadius: 3,
+            },
+            {
+              label: String(year2),
+              data: allVehicles.map(v => vm2[v]?.accidents || 0),
+              backgroundColor: COLORS[1] + '99',
+              borderColor: COLORS[1],
+              borderWidth: 1,
+              borderRadius: 3,
+            },
+          ],
+        });
       } else {
-        const d = await api(`/compare/yearly?year1=${year1}&year2=${year2}`);
-        setData(d);
+        setVehicleChart(null);
       }
+
+      // ── Time-of-day comparison chart ──
+      const pod1 = t1?.by_part_of_day || [];
+      const pod2 = t2?.by_part_of_day || [];
+      if (pod1.length || pod2.length) {
+        const map1 = Object.fromEntries(pod1.map(p => [p.part_of_day, p.accidents]));
+        const map2 = Object.fromEntries(pod2.map(p => [p.part_of_day, p.accidents]));
+        setTimeChart({
+          labels: PART_ORDER.map(p => `${PART_EMOJI[p]} ${p.charAt(0).toUpperCase() + p.slice(1)}`),
+          datasets: [
+            {
+              label: String(year1),
+              data: PART_ORDER.map(p => map1[p] || 0),
+              backgroundColor: COLORS[0] + '99',
+              borderColor: COLORS[0],
+              borderWidth: 1,
+              borderRadius: 3,
+            },
+            {
+              label: String(year2),
+              data: PART_ORDER.map(p => map2[p] || 0),
+              backgroundColor: COLORS[1] + '99',
+              borderColor: COLORS[1],
+              borderWidth: 1,
+              borderRadius: 3,
+            },
+          ],
+        });
+      } else {
+        setTimeChart(null);
+      }
+
     } catch (e) {
       console.error('Compare error:', e);
     } finally {
       setLoading(false);
     }
-  }, [mode, month, year1, year2]);
+  }, [mode, month, year1, year2, getRange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -66,7 +154,6 @@ export default function Compare() {
   const d1 = data?.[String(year1)];
   const d2 = data?.[String(year2)];
 
-  // Build values for cards
   const cardValues = d1 && d2 ? CARD_META.map((c) => {
     if (c.key === 'fr') {
       const v1 = d1.accidents ? (d1.deaths / d1.accidents).toFixed(2) : '0';
@@ -76,7 +163,7 @@ export default function Compare() {
     return { ...c, v1: d1[c.key], v2: d2[c.key], delta: pct(d2[c.key], d1[c.key]) };
   }) : [];
 
-  // Build comparison charts
+  // ── Existing charts ──
   let trendChart = null;
   let typeChart = null;
   let districtChart = null;
@@ -87,74 +174,53 @@ export default function Compare() {
       const map1 = Object.fromEntries(d1.daily.map((r) => [r.day, r]));
       const map2 = Object.fromEntries(d2.daily.map((r) => [r.day, r]));
       trendChart = {
-        labels: days.map((d) => d),
+        labels: days,
         datasets: [
-          {
-            label: `${MONTHS[month - 1]} ${year1}`,
-            data: days.map((d) => map1[d]?.accidents || 0),
-            borderColor: COLORS[0], backgroundColor: COLORS[0] + '20',
-            fill: true, tension: 0.3,
-          },
-          {
-            label: `${MONTHS[month - 1]} ${year2}`,
-            data: days.map((d) => map2[d]?.accidents || 0),
-            borderColor: COLORS[1], backgroundColor: COLORS[1] + '20',
-            fill: true, tension: 0.3,
-          },
+          { label: `${MONTHS[month - 1]} ${year1}`, data: days.map(d => map1[d]?.accidents || 0), borderColor: COLORS[0], backgroundColor: COLORS[0] + '20', fill: true, tension: 0.3 },
+          { label: `${MONTHS[month - 1]} ${year2}`, data: days.map(d => map2[d]?.accidents || 0), borderColor: COLORS[1], backgroundColor: COLORS[1] + '20', fill: true, tension: 0.3 },
         ],
       };
     } else if (mode === 'yearly' && d1.by_month && d2.by_month) {
       const map1 = Object.fromEntries(d1.by_month.map((r) => [r.month, r]));
       const map2 = Object.fromEntries(d2.by_month.map((r) => [r.month, r]));
       trendChart = {
-        labels: MONTHS.map((m) => m.substring(0, 3)),
+        labels: MONTHS.map(m => m.substring(0, 3)),
         datasets: [
-          {
-            label: String(year1),
-            data: MONTHS.map((_, i) => map1[i + 1]?.accidents || 0),
-            borderColor: COLORS[0], backgroundColor: COLORS[0] + '20',
-            fill: true, tension: 0.3,
-          },
-          {
-            label: String(year2),
-            data: MONTHS.map((_, i) => map2[i + 1]?.accidents || 0),
-            borderColor: COLORS[1], backgroundColor: COLORS[1] + '20',
-            fill: true, tension: 0.3,
-          },
+          { label: String(year1), data: MONTHS.map((_, i) => map1[i + 1]?.accidents || 0), borderColor: COLORS[0], backgroundColor: COLORS[0] + '20', fill: true, tension: 0.3 },
+          { label: String(year2), data: MONTHS.map((_, i) => map2[i + 1]?.accidents || 0), borderColor: COLORS[1], backgroundColor: COLORS[1] + '20', fill: true, tension: 0.3 },
         ],
       };
     }
 
     if (mode === 'monthly' && d1.by_type?.length && d2.by_type?.length) {
-      const allTypes = [...new Set([...d1.by_type.map((t) => t.accident_type), ...d2.by_type.map((t) => t.accident_type)])].slice(0, 8);
-      const m1 = Object.fromEntries(d1.by_type.map((t) => [t.accident_type, t.count]));
-      const m2 = Object.fromEntries(d2.by_type.map((t) => [t.accident_type, t.count]));
+      const allTypes = [...new Set([...d1.by_type.map(t => t.accident_type), ...d2.by_type.map(t => t.accident_type)])].slice(0, 8);
+      const m1 = Object.fromEntries(d1.by_type.map(t => [t.accident_type, t.count]));
+      const m2 = Object.fromEntries(d2.by_type.map(t => [t.accident_type, t.count]));
       typeChart = {
-        labels: allTypes.map((t) => t || 'Unknown'),
+        labels: allTypes.map(t => t || 'Unknown'),
         datasets: [
-          { label: String(year1), data: allTypes.map((t) => m1[t] || 0), backgroundColor: COLORS[0] + '90', borderColor: COLORS[0], borderWidth: 1 },
-          { label: String(year2), data: allTypes.map((t) => m2[t] || 0), backgroundColor: COLORS[1] + '90', borderColor: COLORS[1], borderWidth: 1 },
+          { label: String(year1), data: allTypes.map(t => m1[t] || 0), backgroundColor: COLORS[0] + '90', borderColor: COLORS[0], borderWidth: 1 },
+          { label: String(year2), data: allTypes.map(t => m2[t] || 0), backgroundColor: COLORS[1] + '90', borderColor: COLORS[1], borderWidth: 1 },
         ],
       };
     }
 
     if (mode === 'monthly' && d1.by_district?.length && d2.by_district?.length) {
-      const allD = [...new Set([...d1.by_district.map((d) => d.district), ...d2.by_district.map((d) => d.district)])].slice(0, 8);
-      const m1 = Object.fromEntries(d1.by_district.map((d) => [d.district, d.deaths]));
-      const m2 = Object.fromEntries(d2.by_district.map((d) => [d.district, d.deaths]));
+      const allD = [...new Set([...d1.by_district.map(d => d.district), ...d2.by_district.map(d => d.district)])].slice(0, 8);
+      const m1 = Object.fromEntries(d1.by_district.map(d => [d.district, d.deaths]));
+      const m2 = Object.fromEntries(d2.by_district.map(d => [d.district, d.deaths]));
       districtChart = {
         labels: allD,
         datasets: [
-          { label: `${year1} Deaths`, data: allD.map((d) => m1[d] || 0), backgroundColor: COLORS[0] + '90', borderColor: COLORS[0], borderWidth: 1 },
-          { label: `${year2} Deaths`, data: allD.map((d) => m2[d] || 0), backgroundColor: COLORS[1] + '90', borderColor: COLORS[1], borderWidth: 1 },
+          { label: `${year1} Deaths`, data: allD.map(d => m1[d] || 0), backgroundColor: COLORS[0] + '90', borderColor: COLORS[0], borderWidth: 1 },
+          { label: `${year2} Deaths`, data: allD.map(d => m2[d] || 0), backgroundColor: COLORS[1] + '90', borderColor: COLORS[1], borderWidth: 1 },
         ],
       };
     }
   }
 
-  const periodLabel = mode === 'monthly'
-    ? `${MONTHS[month - 1]}`
-    : 'Full Year';
+  const periodLabel = mode === 'monthly' ? MONTHS[month - 1] : 'Full Year';
+  const barOptions = { plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } };
 
   return (
     <div className="compare-page">
@@ -175,9 +241,7 @@ export default function Compare() {
             <FaChartBar /> Year vs Year
           </button>
         </div>
-
         <div className="compare-divider" />
-
         <div className="compare-selectors">
           {mode === 'monthly' && (
             <select value={month} onChange={(e) => setMonth(+e.target.value)}>
@@ -204,52 +268,69 @@ export default function Compare() {
                   <span className="compare-year-tag">{year1}</span>
                   <span className={`compare-num ${c.colorClass}`}>{c.v1}</span>
                 </div>
-                <div className="compare-vs-divider">
-                  <FaExchangeAlt />
-                </div>
+                <div className="compare-vs-divider"><FaExchangeAlt /></div>
                 <div className="compare-side">
                   <span className="compare-year-tag">{year2}</span>
                   <span className={`compare-num ${c.colorClass}`}>{c.v2}</span>
                 </div>
               </div>
               <div className="compare-card-footer">
-                {c.delta !== null ? (
-                  <>Change: <Delta val={c.delta} inverse /></>
-                ) : (
-                  <span className="compare-fr-label">Deaths per accident</span>
-                )}
+                {c.delta !== null
+                  ? <><span>Change: </span><Delta val={c.delta} inverse /></>
+                  : <span className="compare-fr-label">Deaths per accident</span>}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Charts ── */}
       {!loading && d1 && d2 && (
         <div className="compare-charts">
+
+          {/* Trend */}
           {trendChart && (
             <ChartCard
               title={`${periodLabel} Accident Trend: ${year1} vs ${year2}`}
               icon={<FaChartLine />} type="line" data={trendChart} fullWidth
             />
           )}
+
+          {/* Type + District */}
           {(typeChart || districtChart) && (
             <div className="compare-charts-row">
               {typeChart && (
-                <ChartCard
-                  title={`Accident Type Comparison`}
-                  icon={<FaChartBar />} type="bar" data={typeChart}
-                  options={{ plugins: { legend: { position: 'top' } } }}
-                />
+                <ChartCard title="Accident Type Comparison" icon={<FaChartBar />} type="bar" data={typeChart}
+                  options={{ plugins: { legend: { position: 'top' } } }} />
               )}
               {districtChart && (
-                <ChartCard
-                  title={`Deaths by District`}
-                  icon={<FaChartBar />} type="bar" data={districtChart}
-                  options={{ indexAxis: 'y', plugins: { legend: { position: 'top' } } }}
-                />
+                <ChartCard title="Deaths by District" icon={<FaChartBar />} type="bar" data={districtChart}
+                  options={{ indexAxis: 'y', plugins: { legend: { position: 'top' } } }} />
               )}
             </div>
+          )}
+
+          {/* Vehicle comparison */}
+          {vehicleChart && (
+            <ChartCard
+              title={`Vehicles Involved: ${year1} vs ${year2}`}
+              icon={<FaCar />} type="bar" data={vehicleChart} fullWidth
+              options={barOptions}
+            />
+          )}
+
+          {/* Time-of-day comparison */}
+          {timeChart && (
+            <ChartCard
+              title={`Accidents by Time of Day: ${year1} vs ${year2}`}
+              icon={<FaClock />} type="bar" data={timeChart} fullWidth
+              options={barOptions}
+            />
+          )}
+
+          {!vehicleChart && !timeChart && (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.5rem' }}>
+              Vehicle and time-of-day data will appear here once articles with that information are scanned for the selected periods.
+            </p>
           )}
         </div>
       )}

@@ -3,8 +3,47 @@ import { api, formatDate, COLORS } from '../utils/api';
 import {
   FaSearch, FaFilter, FaTimes, FaExternalLinkAlt,
   FaSkullCrossbones, FaUserInjured, FaCarCrash,
-  FaMapMarkerAlt,
+  FaMapMarkerAlt, FaClock,
 } from 'react-icons/fa';
+
+const TIME_OF_DAY_OPTIONS = [
+  { label: 'Any time', value: '' },
+  { label: '🌑 Midnight', value: 'midnight' },
+  { label: '🌅 Dawn',     value: 'dawn' },
+  { label: '☀️ Morning',  value: 'morning' },
+  { label: '🌞 Noon',     value: 'noon' },
+  { label: '🌤️ Afternoon',value: 'afternoon' },
+  { label: '🌆 Evening',  value: 'evening' },
+  { label: '🌙 Night',    value: 'night' },
+];
+
+const TIME_BADGE_META = {
+  midnight:  { emoji: '🌑', color: '#6366f1' },
+  dawn:      { emoji: '🌅', color: '#f97316' },
+  morning:   { emoji: '☀️', color: '#ca8a04' },
+  noon:      { emoji: '🌞', color: '#d97706' },
+  afternoon: { emoji: '🌤️', color: '#0891b2' },
+  evening:   { emoji: '🌆', color: '#7c3aed' },
+  night:     { emoji: '🌙', color: '#2563eb' },
+};
+
+function TimeBadge({ part, time }) {
+  const meta = TIME_BADGE_META[part];
+  if (!meta) return null;
+  return (
+    <span
+      title={time ? `${part} (${time})` : part}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '3px',
+        fontSize: '0.72rem', padding: '1px 6px', borderRadius: '999px',
+        background: meta.color + '22', color: meta.color,
+        border: `1px solid ${meta.color}44`, whiteSpace: 'nowrap',
+      }}
+    >
+      {meta.emoji} {time || part}
+    </span>
+  );
+}
 
 const SEVERITY_OPTIONS = [
   { label: 'Any', value: '' },
@@ -20,6 +59,7 @@ export default function SearchPage() {
   const [district, setDistrict] = useState('');
   const [type, setType] = useState('');
   const [severity, setSeverity] = useState('');
+  const [partOfDay, setPartOfDay] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [results, setResults] = useState([]);
@@ -47,6 +87,7 @@ export default function SearchPage() {
       if (district) params.set('district', district);
       if (type) params.set('type', type);
       if (severity) params.set('severity', severity);
+      if (partOfDay) params.set('part_of_day', partOfDay);
       if (startDate) params.set('start', startDate);
       if (endDate) params.set('end', endDate);
       params.set('limit', '100');
@@ -63,7 +104,7 @@ export default function SearchPage() {
 
   const clearFilters = () => {
     setQuery(''); setDistrict(''); setType('');
-    setSeverity(''); setStartDate(''); setEndDate('');
+    setSeverity(''); setPartOfDay(''); setStartDate(''); setEndDate('');
     setResults([]); setSearched(false);
   };
 
@@ -73,7 +114,7 @@ export default function SearchPage() {
 
   const totalDeaths = results.reduce((s, r) => s + (r.deaths || 0), 0);
   const totalInjuries = results.reduce((s, r) => s + (r.injuries || 0), 0);
-  const hasFilters = query || district || type || severity || startDate || endDate;
+  const hasFilters = query || district || type || severity || partOfDay || startDate || endDate;
 
   return (
     <div className="search-page">
@@ -128,6 +169,15 @@ export default function SearchPage() {
           </div>
 
           <div className="filter-group">
+            <label><FaClock /> Time of Day</label>
+            <select value={partOfDay} onChange={(e) => setPartOfDay(e.target.value)}>
+              {TIME_OF_DAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label>From</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
@@ -168,6 +218,7 @@ export default function SearchPage() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Time</th>
                   <th>Type</th>
                   <th>District</th>
                   <th>Location</th>
@@ -181,6 +232,11 @@ export default function SearchPage() {
                 {results.map((r, i) => (
                   <tr key={r.id || i} className={r.deaths >= 5 ? 'row-critical' : ''}>
                     <td className="td-nowrap">{formatDate(r.accident_date)}</td>
+                    <td>
+                      {r.part_of_day
+                        ? <TimeBadge part={r.part_of_day} time={r.accident_time} />
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
                     <td>
                       {r.accident_type ? (
                         <span className="badge badge-info">{r.accident_type}</span>

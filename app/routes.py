@@ -174,7 +174,8 @@ async def get_records(
                 """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
                           a.district, a.division, a.latitude, a.longitude,
                           a.deaths, a.injuries, a.vehicles_involved, a.road_name,
-                          a.accident_date, a.summary, a.created_at,
+                          a.accident_date, a.accident_time, a.part_of_day,
+                          a.summary, a.created_at,
                           ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
@@ -193,7 +194,8 @@ async def get_records(
                 """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
                           a.district, a.division, a.latitude, a.longitude,
                           a.deaths, a.injuries, a.vehicles_involved, a.road_name,
-                          a.accident_date, a.summary, a.created_at,
+                          a.accident_date, a.accident_time, a.part_of_day,
+                          a.summary, a.created_at,
                           ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
@@ -744,11 +746,12 @@ async def search_advanced(
     district: Optional[str] = Query(None),
     type: Optional[str] = Query(None, alias="type"),
     severity: Optional[str] = Query(None),
+    part_of_day: Optional[str] = Query(None),
     start: Optional[str] = Query(None),
     end: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
-    """Full-text search with optional district, type, severity, date filters."""
+    """Full-text search with optional district, type, severity, time-of-day, and date filters."""
     with db.get_db() as conn:
         clauses = []
         params = []
@@ -780,6 +783,11 @@ async def search_advanced(
         elif severity == "none":
             clauses.append("a.deaths = 0 AND a.injuries = 0")
 
+        _valid_parts = {"midnight", "dawn", "morning", "noon", "afternoon", "evening", "night"}
+        if part_of_day and part_of_day in _valid_parts:
+            clauses.append("a.part_of_day = ?")
+            params.append(part_of_day)
+
         if start:
             clauses.append("a.accident_date >= ?")
             params.append(start)
@@ -793,7 +801,8 @@ async def search_advanced(
             f"""SELECT a.id, a.article_id, a.accident_type, a.location_raw,
                        a.district, a.division, a.latitude, a.longitude,
                        a.deaths, a.injuries, a.vehicles_involved, a.road_name,
-                       a.accident_date, a.summary, a.created_at,
+                       a.accident_date, a.accident_time, a.part_of_day,
+                       a.summary, a.created_at,
                        ar.title as article_title, ar.url as article_url
                 FROM accidents a
                 LEFT JOIN articles ar ON a.article_id = ar.id
@@ -902,88 +911,86 @@ async def get_forecast(
 # ─── Time-of-Day / Day-of-Week Patterns ────────────────────────
 
 @router.get("/time-patterns")
-async def get_time_patterns():
+async def get_time_patterns(
+    start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
     """
     Return day-of-week, month, part-of-day, and hour distributions.
+    Optionally filtered by date range.
     """
+    date_filter = "AND accident_date BETWEEN ? AND ?" if (start and end) else ""
+    date_params = (start, end) if (start and end) else ()
+
     with db.get_db() as conn:
-        # Day-of-week distribution (0=Sunday .. 6=Saturday in SQLite strftime %w)
         dow_rows = conn.execute(
-            """SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+            f"""SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY dow
-               ORDER BY dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY dow ORDER BY dow""",
+            date_params,
         ).fetchall()
 
-        # Month-of-year distribution
         moy_rows = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+            f"""SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY month
-               ORDER BY month"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY month ORDER BY month""",
+            date_params,
         ).fetchall()
 
-        # Month x Day-of-week grid for heatmap
         grid_rows = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+            f"""SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                       CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY month, dow
-               ORDER BY month, dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY month, dow ORDER BY month, dow""",
+            date_params,
         ).fetchall()
 
-        # Week-of-month patterns (week 1-5)
         wom_rows = conn.execute(
-            """SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
+            f"""SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
                       CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY week, dow
-               ORDER BY week, dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY week, dow ORDER BY week, dow""",
+            date_params,
         ).fetchall()
 
         part_rows = conn.execute(
-            """SELECT part_of_day,
+            f"""SELECT part_of_day,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE part_of_day IS NOT NULL
+               WHERE part_of_day IS NOT NULL {date_filter}
                GROUP BY part_of_day
                ORDER BY CASE part_of_day
-                   WHEN 'midnight' THEN 0
-                   WHEN 'dawn' THEN 1
-                   WHEN 'morning' THEN 2
-                   WHEN 'noon' THEN 3
-                   WHEN 'afternoon' THEN 4
-                   WHEN 'evening' THEN 5
-                   WHEN 'night' THEN 6
-                   ELSE 7
-               END"""
+                   WHEN 'midnight' THEN 0 WHEN 'dawn' THEN 1 WHEN 'morning' THEN 2
+                   WHEN 'noon' THEN 3 WHEN 'afternoon' THEN 4 WHEN 'evening' THEN 5
+                   WHEN 'night' THEN 6 ELSE 7 END""",
+            date_params,
         ).fetchall()
 
         hour_rows = conn.execute(
-            """SELECT CAST(substr(accident_time, 1, 2) AS INTEGER) as hour,
+            f"""SELECT CAST(substr(accident_time, 1, 2) AS INTEGER) as hour,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE accident_time IS NOT NULL
-               GROUP BY hour
-               ORDER BY hour"""
+               WHERE accident_time IS NOT NULL {date_filter}
+               GROUP BY hour ORDER BY hour""",
+            date_params,
         ).fetchall()
 
         return {
@@ -1650,15 +1657,28 @@ async def get_blackspots(
 # ─── Vehicle Type Analytics ─────────────────────────────────────
 
 @router.get("/vehicle-analytics")
-async def get_vehicle_analytics():
-    """Deep dive into accident statistics by vehicle type."""
+async def get_vehicle_analytics(
+    start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
+    """Deep dive into accident statistics by vehicle type, optionally filtered by date range."""
     with db.get_db() as conn:
-        rows = conn.execute(
-            """SELECT id, vehicles_involved, deaths, injuries, accident_type,
-                      accident_date, district
-               FROM accidents
-               WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''"""
-        ).fetchall()
+        if start and end:
+            rows = conn.execute(
+                """SELECT id, vehicles_involved, deaths, injuries, accident_type,
+                          accident_date, district
+                   FROM accidents
+                   WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''
+                     AND accident_date BETWEEN ? AND ?""",
+                (start, end),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, vehicles_involved, deaths, injuries, accident_type,
+                          accident_date, district
+                   FROM accidents
+                   WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''"""
+            ).fetchall()
 
     from collections import defaultdict, Counter
 
