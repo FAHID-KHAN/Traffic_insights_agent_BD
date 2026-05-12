@@ -171,7 +171,11 @@ async def get_records(
                 (like, like, like, like, like),
             ).fetchone()["c"]
             rows = conn.execute(
-                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                          a.district, a.division, a.latitude, a.longitude,
+                          a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                          a.accident_date, a.summary, a.created_at,
+                          ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
                    WHERE a.district LIKE ? OR a.location_raw LIKE ?
@@ -186,7 +190,11 @@ async def get_records(
                 "SELECT COUNT(*) as c FROM accidents"
             ).fetchone()["c"]
             rows = conn.execute(
-                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                          a.district, a.division, a.latitude, a.longitude,
+                          a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                          a.accident_date, a.summary, a.created_at,
+                          ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
                    ORDER BY a.accident_date DESC, a.id DESC
@@ -651,7 +659,11 @@ async def search_accidents(
 ):
     with db.get_db() as conn:
         rows = conn.execute(
-            """SELECT a.*, ar.title as article_title, ar.url as article_url
+            """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                      a.district, a.division, a.latitude, a.longitude,
+                      a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                      a.accident_date, a.summary, a.created_at,
+                      ar.title as article_title, ar.url as article_url
                FROM accidents a
                JOIN articles ar ON a.article_id = ar.id
                WHERE a.district LIKE ? OR a.location_raw LIKE ?
@@ -778,7 +790,11 @@ async def search_advanced(
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         rows = conn.execute(
-            f"""SELECT a.*, ar.title as article_title, ar.url as article_url
+            f"""SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                       a.district, a.division, a.latitude, a.longitude,
+                       a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                       a.accident_date, a.summary, a.created_at,
+                       ar.title as article_title, ar.url as article_url
                 FROM accidents a
                 LEFT JOIN articles ar ON a.article_id = ar.id
                 {where}
@@ -888,9 +904,7 @@ async def get_forecast(
 @router.get("/time-patterns")
 async def get_time_patterns():
     """
-    Return day-of-week distribution for accidents.
-    Since articles don't include exact time, we compute day-of-week patterns
-    and monthly distribution for a heatmap.
+    Return day-of-week, month, part-of-day, and hour distributions.
     """
     with db.get_db() as conn:
         # Day-of-week distribution (0=Sunday .. 6=Saturday in SQLite strftime %w)
@@ -941,11 +955,44 @@ async def get_time_patterns():
                ORDER BY week, dow"""
         ).fetchall()
 
+        part_rows = conn.execute(
+            """SELECT part_of_day,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE part_of_day IS NOT NULL
+               GROUP BY part_of_day
+               ORDER BY CASE part_of_day
+                   WHEN 'midnight' THEN 0
+                   WHEN 'dawn' THEN 1
+                   WHEN 'morning' THEN 2
+                   WHEN 'noon' THEN 3
+                   WHEN 'afternoon' THEN 4
+                   WHEN 'evening' THEN 5
+                   WHEN 'night' THEN 6
+                   ELSE 7
+               END"""
+        ).fetchall()
+
+        hour_rows = conn.execute(
+            """SELECT CAST(substr(accident_time, 1, 2) AS INTEGER) as hour,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE accident_time IS NOT NULL
+               GROUP BY hour
+               ORDER BY hour"""
+        ).fetchall()
+
         return {
             "by_dow": [dict(r) for r in dow_rows],
             "by_month": [dict(r) for r in moy_rows],
             "grid": [dict(r) for r in grid_rows],
             "week_grid": [dict(r) for r in wom_rows],
+            "by_part_of_day": [dict(r) for r in part_rows],
+            "by_hour": [dict(r) for r in hour_rows],
         }
 
 

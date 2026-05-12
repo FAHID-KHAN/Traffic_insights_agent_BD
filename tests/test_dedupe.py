@@ -16,7 +16,7 @@ def _accidents():
         rows = conn.execute(
             """SELECT id, article_id, accident_type, location_raw, deaths,
                       injuries, accident_date, summary, district, road_name,
-                      vehicles_involved
+                      vehicles_involved, accident_time, part_of_day
                FROM accidents
                ORDER BY id ASC"""
         ).fetchall()
@@ -85,6 +85,95 @@ def test_sylhet_followup_updates_existing_accident(tmp_path, monkeypatch):
     assert records[0]["merge_result"]["after"]["accident_date"] == "2026-05-03"
     assert records[0]["merge_result"]["after"]["deaths"] == 9
     assert records[0]["merge_result"]["after"]["injuries"] == 12
+
+
+def test_high_confidence_update_fills_missing_time_metadata(tmp_path, monkeypatch):
+    update_log = tmp_path / "accident_update_events.log"
+    monkeypatch.setattr(accident_dedupe, "write_update_log", lambda payload: _write_log(update_log, payload))
+
+    first_article = _article("https://example.com/time-1", "Crash in Sylhet", date(2026, 5, 3))
+    first_id = upsert_accident_event(
+        first_article,
+        AccidentEvent(
+            accident_type="collision",
+            location_raw="Sylhet-Tamabil Highway in Jaintapur upazila",
+            district="Sylhet",
+            deaths=2,
+            injuries=1,
+            vehicles_involved=["bus", "microbus"],
+            road_name="Sylhet-Tamabil Highway",
+            summary="A bus and microbus collided in Jaintapur, killing 2.",
+        ),
+        date(2026, 5, 3),
+    )
+
+    followup_article = _article("https://example.com/time-2", "Crash happened at night", date(2026, 5, 3))
+    second_id = upsert_accident_event(
+        followup_article,
+        AccidentEvent(
+            accident_type="collision",
+            location_raw="Sylhet-Tamabil Highway in Jaintapur upazila",
+            district="Sylhet",
+            deaths=2,
+            injuries=1,
+            vehicles_involved=["bus", "microbus"],
+            road_name="Sylhet Tamabil Highway",
+            accident_time="20.15",
+            summary="A bus and microbus collided at 8:15pm in Jaintapur.",
+        ),
+        date(2026, 5, 3),
+    )
+
+    rows = _accidents()
+    assert first_id == second_id
+    assert rows[0]["accident_time"] == "20:15"
+    assert rows[0]["part_of_day"] == "night"
+    records = _log_records(update_log)
+    assert records[0]["merge_result"]["after"]["accident_time"] == "20:15"
+
+
+def test_high_confidence_update_does_not_overwrite_existing_time(tmp_path, monkeypatch):
+    update_log = tmp_path / "accident_update_events.log"
+    monkeypatch.setattr(accident_dedupe, "write_update_log", lambda payload: _write_log(update_log, payload))
+
+    first_article = _article("https://example.com/time-conflict-1", "Crash in Sylhet", date(2026, 5, 3))
+    first_id = upsert_accident_event(
+        first_article,
+        AccidentEvent(
+            accident_type="collision",
+            location_raw="Sylhet-Tamabil Highway in Jaintapur upazila",
+            district="Sylhet",
+            deaths=2,
+            injuries=1,
+            vehicles_involved=["bus", "microbus"],
+            road_name="Sylhet-Tamabil Highway",
+            accident_time="19:30",
+            summary="A bus and microbus collided in Jaintapur.",
+        ),
+        date(2026, 5, 3),
+    )
+
+    followup_article = _article("https://example.com/time-conflict-2", "Crash update", date(2026, 5, 3))
+    second_id = upsert_accident_event(
+        followup_article,
+        AccidentEvent(
+            accident_type="collision",
+            location_raw="Sylhet-Tamabil Highway in Jaintapur upazila",
+            district="Sylhet",
+            deaths=2,
+            injuries=1,
+            vehicles_involved=["bus", "microbus"],
+            road_name="Sylhet Tamabil Highway",
+            accident_time="20:15",
+            summary="A bus and microbus collided in Jaintapur.",
+        ),
+        date(2026, 5, 3),
+    )
+
+    rows = _accidents()
+    assert first_id == second_id
+    assert rows[0]["accident_time"] == "19:30"
+    assert rows[0]["part_of_day"] == "evening"
 
 
 def test_latest_first_updates_merge_into_earliest_accident_date(tmp_path, monkeypatch):
