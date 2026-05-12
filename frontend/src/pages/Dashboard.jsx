@@ -23,7 +23,7 @@ function getDateRange(key) {
     case '7d':   return { start: fmt(new Date(today.getTime() - 7  * 86400000)), end };
     case '30d':  return { start: fmt(new Date(today.getTime() - 30 * 86400000)), end };
     case '90d':  return { start: fmt(new Date(today.getTime() - 90 * 86400000)), end };
-    case '6m':   return { start: fmt(new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())), end };
+    case '6m':   { const d = new Date(today); d.setMonth(d.getMonth() - 6); return { start: fmt(d), end }; }
     case 'year': return { start: `${today.getFullYear()}-01-01`, end };
     case 'all':  return null;
     default:     return null;
@@ -38,15 +38,14 @@ export default function Dashboard() {
   const [districtData, setDistrictData] = useState(null);
   const [vehicleData, setVehicleData] = useState(null);
   const [timeInsights, setTimeInsights] = useState(null);
-  const [timePodData, setTimePodData] = useState(null);   // chart data for part-of-day
-  const [timeHourData, setTimeHourData] = useState(null); // chart data for by-hour
+  const [timePodData, setTimePodData] = useState(null);
+  const [timeHourData, setTimeHourData] = useState(null);
   const [timeframe, setTimeframe] = useState('30d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const load = useCallback(async () => {
     try {
-      // Build date-range query string
       let rangeQS = '';
       let trendQS = '';
       if (timeframe === 'custom' && customStart && customEnd) {
@@ -82,7 +81,6 @@ export default function Dashboard() {
         setLastUpdate(ov.last_scrape.finished_at || 'Running...');
       }
 
-      // Trend chart data
       if (trend.length > 0) {
         setTrendData({
           labels: trend.map((d) => formatDate(d.accident_date)),
@@ -96,13 +94,10 @@ export default function Dashboard() {
         setTrendData(null);
       }
 
-      // Type breakdown from trend data
       if (trend.length > 0) {
         const range = getDateRange(timeframe);
         let monthData;
         if (timeframe === 'custom' && customStart && customEnd) {
-          // For custom ranges use a monthly query for the start month as a proxy,
-          // but better: compute by-type from the overview's date range
           const dt = new Date(customStart);
           monthData = await api(`/monthly?year=${dt.getFullYear()}&month=${dt.getMonth() + 1}`);
         } else if (range) {

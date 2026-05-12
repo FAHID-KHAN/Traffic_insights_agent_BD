@@ -132,7 +132,7 @@ async def get_danger_zones(
         with db.get_db() as conn:
             rows = conn.execute(
                 """SELECT district, division, COUNT(*) as total_accidents,
-                          SUM(deaths) as total_deaths, SUM(injuries) as total_injuries,
+                          COALESCE(SUM(deaths), 0) as total_deaths, COALESCE(SUM(injuries), 0) as total_injuries,
                           AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
                    FROM accidents
                    WHERE district IS NOT NULL AND accident_date BETWEEN ? AND ?
@@ -580,7 +580,7 @@ async def compare_monthly(
             ).fetchall()
             by_district = conn.execute(
                 """SELECT district, COUNT(*) as count,
-                          SUM(deaths) as deaths
+                          COALESCE(SUM(deaths), 0) as deaths
                    FROM accidents
                    WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
                    GROUP BY district ORDER BY count DESC LIMIT 10""",
@@ -588,7 +588,7 @@ async def compare_monthly(
             ).fetchall()
             daily = conn.execute(
                 """SELECT CAST(strftime('%d', accident_date) AS INTEGER) as day,
-                          COUNT(*) as accidents, SUM(deaths) as deaths
+                          COUNT(*) as accidents, COALESCE(SUM(deaths), 0) as deaths
                    FROM accidents
                    WHERE strftime('%Y-%m', accident_date) = ?
                    GROUP BY day ORDER BY day""",
@@ -625,7 +625,7 @@ async def compare_yearly(
             by_month = conn.execute(
                 """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                           COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE strftime('%Y', accident_date) = ?
                    GROUP BY month ORDER BY month""",
@@ -819,7 +819,7 @@ async def get_trend(
         if start and end:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE accident_date BETWEEN ? AND ?
                    GROUP BY accident_date
@@ -829,7 +829,7 @@ async def get_trend(
         elif days:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE accident_date >= date('now', ? || ' days')
                    GROUP BY accident_date
@@ -839,7 +839,7 @@ async def get_trend(
         else:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    GROUP BY accident_date
                    ORDER BY accident_date"""
@@ -1164,60 +1164,63 @@ async def get_accident_clusters(
     clusters = []
     cluster_id = 0
 
+    severity_order = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
+
     for district, accidents in by_district.items():
         if len(accidents) < min_accidents:
             continue
 
-        # Sliding window: find groups of accidents within window_days
-        i = 0
-        while i < len(accidents):
+        seen_starts: set = set()
+        for i in range(len(accidents)):
+            try:
+                d1 = _dt.strptime(accidents[i]["accident_date"], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+
             cluster_accs = [accidents[i]]
-            j = i + 1
-            while j < len(accidents):
+            for j in range(i + 1, len(accidents)):
                 try:
-                    d1 = _dt.strptime(accidents[i]["accident_date"], "%Y-%m-%d")
                     d2 = _dt.strptime(accidents[j]["accident_date"], "%Y-%m-%d")
-                    if (d2 - d1).days <= window_days:
-                        cluster_accs.append(accidents[j])
-                        j += 1
-                    else:
-                        break
                 except (ValueError, TypeError):
-                    j += 1
                     continue
+                if (d2 - d1).days <= window_days:
+                    cluster_accs.append(accidents[j])
+                else:
+                    break
 
-            if len(cluster_accs) >= min_accidents:
-                cluster_id += 1
-                total_deaths = sum(a.get("deaths", 0) or 0 for a in cluster_accs)
-                total_injuries = sum(a.get("injuries", 0) or 0 for a in cluster_accs)
-                date_start = cluster_accs[0]["accident_date"]
-                date_end = cluster_accs[-1]["accident_date"]
-                severity = (
-                    "critical" if total_deaths >= 10
-                    else "high" if total_deaths >= 5
-                    else "moderate" if total_deaths >= 2
-                    else "low"
-                )
-                clusters.append({
-                    "cluster_id": cluster_id,
-                    "district": district,
-                    "division": cluster_accs[0].get("division"),
-                    "accidents_count": len(cluster_accs),
-                    "total_deaths": total_deaths,
-                    "total_injuries": total_injuries,
-                    "date_start": date_start,
-                    "date_end": date_end,
-                    "span_days": (_dt.strptime(date_end, "%Y-%m-%d") - _dt.strptime(date_start, "%Y-%m-%d")).days if date_start != date_end else 0,
-                    "severity": severity,
-                    "accidents": cluster_accs,
-                })
-                i = j  # skip past this cluster
-            else:
-                i += 1
+            if len(cluster_accs) < min_accidents:
+                continue
 
-    # Sort by recency, then severity
-    severity_order = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
-    clusters.sort(key=lambda c: (c["date_start"]), reverse=True)
+            date_start = cluster_accs[0]["accident_date"]
+            if date_start in seen_starts:
+                continue
+            seen_starts.add(date_start)
+
+            cluster_id += 1
+            total_deaths = sum(a.get("deaths", 0) or 0 for a in cluster_accs)
+            total_injuries = sum(a.get("injuries", 0) or 0 for a in cluster_accs)
+            date_end = cluster_accs[-1]["accident_date"]
+            severity = (
+                "critical" if total_deaths >= 10
+                else "high" if total_deaths >= 5
+                else "moderate" if total_deaths >= 2
+                else "low"
+            )
+            clusters.append({
+                "cluster_id": cluster_id,
+                "district": district,
+                "division": cluster_accs[0].get("division"),
+                "accidents_count": len(cluster_accs),
+                "total_deaths": total_deaths,
+                "total_injuries": total_injuries,
+                "date_start": date_start,
+                "date_end": date_end,
+                "span_days": (_dt.strptime(date_end, "%Y-%m-%d") - _dt.strptime(date_start, "%Y-%m-%d")).days if date_start != date_end else 0,
+                "severity": severity,
+                "accidents": cluster_accs,
+            })
+
+    clusters.sort(key=lambda c: (c["date_start"], severity_order.get(c["severity"], 9)), reverse=True)
     return clusters
 
 
@@ -1702,11 +1705,14 @@ async def get_road_analysis(
 
 @router.get("/blackspots")
 async def get_blackspots(
-    eps_km: float = Query(5.0, ge=0.5, le=50, description="Cluster radius in km"),
+    eps_km: float = Query(45.0, ge=10.0, le=200, description="Cluster radius in km"),
     min_samples: int = Query(3, ge=2, le=20, description="Min accidents per cluster"),
 ):
-    """Identify geographic accident blackspots using DBSCAN spatial clustering."""
-    import hashlib
+    """
+    Identify regional accident clusters by grouping neighboring districts using DBSCAN.
+    Coordinates are district centroids — eps_km should be large enough (30–80 km)
+    to bridge adjacent districts into meaningful geographic regions.
+    """
     import numpy as np
     try:
         from sklearn.cluster import DBSCAN
@@ -1724,42 +1730,25 @@ async def get_blackspots(
     if len(rows) < min_samples:
         return []
 
-    # Since coordinates are district centroids, apply deterministic jitter
-    # based on each accident's unique attributes so DBSCAN can find
-    # meaningful sub-clusters within districts.
-    def jitter_coord(row):
-        seed_str = f"{row['id']}-{row['location_raw'] or ''}-{row['accident_date'] or ''}-{row['accident_type'] or ''}"
-        h = hashlib.md5(seed_str.encode()).hexdigest()
-        # ~0.05 degrees ≈ 5.5 km spread around centroid
-        dlat = (int(h[:8], 16) / 0xFFFFFFFF - 0.5) * 0.10
-        dlon = (int(h[8:16], 16) / 0xFFFFFFFF - 0.5) * 0.10
-        return (row["latitude"] + dlat, row["longitude"] + dlon)
-
-    jittered = [jitter_coord(r) for r in rows]
-    coords = np.array(jittered)
-
-    # Convert km radius to approximate radians for haversine
+    coords = np.array([(r["latitude"], r["longitude"]) for r in rows])
     eps_rad = eps_km / 6371.0
 
     db_scan = DBSCAN(eps=eps_rad, min_samples=min_samples, metric="haversine")
     labels = db_scan.fit_predict(np.radians(coords))
 
-    # Group accidents by cluster label (ignore noise label -1)
     from collections import defaultdict
     cluster_map = defaultdict(list)
-    cluster_coords = defaultdict(list)
     for i, label in enumerate(labels):
         if label >= 0:
             cluster_map[int(label)].append(dict(rows[i]))
-            cluster_coords[int(label)].append(jittered[i])
 
-    blackspots = []
+    clusters = []
     for cid, accidents in cluster_map.items():
-        j_lats = [c[0] for c in cluster_coords[cid]]
-        j_lons = [c[1] for c in cluster_coords[cid]]
+        lats = [a["latitude"] for a in accidents]
+        lons = [a["longitude"] for a in accidents]
         total_deaths = sum(a.get("deaths", 0) or 0 for a in accidents)
         total_injuries = sum(a.get("injuries", 0) or 0 for a in accidents)
-        districts = list({a["district"] for a in accidents if a["district"]})
+        districts = sorted({a["district"] for a in accidents if a["district"]})
 
         severity = (
             "critical" if total_deaths >= 10
@@ -1768,21 +1757,22 @@ async def get_blackspots(
             else "low"
         )
 
-        blackspots.append({
+        clusters.append({
             "cluster_id": cid,
-            "center_lat": round(sum(j_lats) / len(j_lats), 6),
-            "center_lon": round(sum(j_lons) / len(j_lons), 6),
+            "center_lat": round(sum(lats) / len(lats), 6),
+            "center_lon": round(sum(lons) / len(lons), 6),
             "radius_km": eps_km,
             "accident_count": len(accidents),
             "total_deaths": total_deaths,
             "total_injuries": total_injuries,
             "districts": districts,
+            "district_count": len(districts),
             "severity": severity,
             "accidents": accidents,
         })
 
-    blackspots.sort(key=lambda b: (-b["total_deaths"], -b["accident_count"]))
-    return blackspots
+    clusters.sort(key=lambda c: (-c["total_deaths"], -c["accident_count"]))
+    return clusters
 
 
 # ─── Vehicle Type Analytics ─────────────────────────────────────
