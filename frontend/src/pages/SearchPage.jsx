@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api, formatDate, COLORS } from '../utils/api';
+import { TIME_BANDS, PART_ORDER } from '../utils/timeColors';
 import {
   FaSearch, FaFilter, FaTimes, FaExternalLinkAlt,
   FaSkullCrossbones, FaUserInjured, FaCarCrash,
@@ -8,27 +9,11 @@ import {
 
 const TIME_OF_DAY_OPTIONS = [
   { label: 'Any time', value: '' },
-  { label: '🌑 Midnight', value: 'midnight' },
-  { label: '🌅 Dawn',     value: 'dawn' },
-  { label: '☀️ Morning',  value: 'morning' },
-  { label: '🌞 Noon',     value: 'noon' },
-  { label: '🌤️ Afternoon',value: 'afternoon' },
-  { label: '🌆 Evening',  value: 'evening' },
-  { label: '🌙 Night',    value: 'night' },
+  ...PART_ORDER.map(p => ({ label: `${TIME_BANDS[p].emoji} ${TIME_BANDS[p].label}`, value: p })),
 ];
 
-const TIME_BADGE_META = {
-  midnight:  { emoji: '🌑', color: '#6366f1' },
-  dawn:      { emoji: '🌅', color: '#f97316' },
-  morning:   { emoji: '☀️', color: '#ca8a04' },
-  noon:      { emoji: '🌞', color: '#d97706' },
-  afternoon: { emoji: '🌤️', color: '#0891b2' },
-  evening:   { emoji: '🌆', color: '#7c3aed' },
-  night:     { emoji: '🌙', color: '#2563eb' },
-};
-
 function TimeBadge({ part, time }) {
-  const meta = TIME_BADGE_META[part];
+  const meta = TIME_BANDS[part];
   if (!meta) return null;
   return (
     <span

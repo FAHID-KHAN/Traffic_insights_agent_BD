@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, COLORS } from '../utils/api';
+import { TIME_BANDS, PART_ORDER } from '../utils/timeColors';
 import { FaThermometerHalf, FaCalendarAlt, FaExchangeAlt } from 'react-icons/fa';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -19,17 +20,6 @@ function getHeatOpacity(value, max) {
   if (max === 0) return 0.1;
   return 0.2 + (value / max) * 0.8;
 }
-
-const PART_OF_DAY_META = {
-  midnight:  { label: 'Midnight',  emoji: '🌑', color: '#6366f1' },
-  dawn:      { label: 'Dawn',      emoji: '🌅', color: '#f97316' },
-  morning:   { label: 'Morning',   emoji: '☀️', color: '#eab308' },
-  noon:      { label: 'Noon',      emoji: '🌞', color: '#fbbf24' },
-  afternoon: { label: 'Afternoon', emoji: '🌤️', color: '#06b6d4' },
-  evening:   { label: 'Evening',   emoji: '🌆', color: '#8b5cf6' },
-  night:     { label: 'Night',     emoji: '🌙', color: '#3b82f6' },
-};
-const PART_ORDER = ['midnight','dawn','morning','noon','afternoon','evening','night'];
 
 export default function TimeHeatmap() {
   const [data, setData] = useState(null);
@@ -194,7 +184,7 @@ export default function TimeHeatmap() {
     return (
       <div className="dow-bars">
         {PART_ORDER.map(part => {
-          const meta = PART_OF_DAY_META[part];
+          const meta = TIME_BANDS[part];
           const entry = by_part_of_day.find(d => d.part_of_day === part) || { accidents: 0, deaths: 0 };
           const val = metric === 'deaths' ? entry.deaths : entry.accidents;
           const pct = (val / maxVal) * 100;
