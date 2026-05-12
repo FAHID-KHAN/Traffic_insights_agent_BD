@@ -30,10 +30,10 @@ export default function ClusterTimeline() {
   }, [windowDays, minAccidents]);
 
   useEffect(() => {
-    load();
+    load(); // eslint-disable-line react-hooks/set-state-in-effect
     intervalRef.current = setInterval(load, AUTO_REFRESH_MS);
     return () => clearInterval(intervalRef.current);
-  }, [load]); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [load]);
 
   const toggleExpand = (id) => {
     setExpanded(prev => {

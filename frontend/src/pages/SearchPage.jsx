@@ -100,7 +100,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, district, type, severity, startDate, endDate]);
+  }, [query, district, type, severity, partOfDay, startDate, endDate]);
 
   const clearFilters = () => {
     setQuery(''); setDistrict(''); setType('');
