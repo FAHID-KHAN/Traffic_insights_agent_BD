@@ -1,21 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, formatDate } from '../utils/api';
+import { TIME_BANDS } from '../utils/timeColors';
 import { FaDatabase, FaSearch, FaExternalLinkAlt, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
 const PAGE_SIZE = 50;
 
-const TIME_BADGE_META = {
-  midnight:  { emoji: '🌑', color: '#6366f1' },
-  dawn:      { emoji: '🌅', color: '#f97316' },
-  morning:   { emoji: '☀️', color: '#ca8a04' },
-  noon:      { emoji: '🌞', color: '#d97706' },
-  afternoon: { emoji: '🌤️', color: '#0891b2' },
-  evening:   { emoji: '🌆', color: '#7c3aed' },
-  night:     { emoji: '🌙', color: '#2563eb' },
-};
-
 function TimeBadge({ part, time }) {
-  const meta = TIME_BADGE_META[part];
+  const meta = TIME_BANDS[part];
   if (!meta) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
   return (
     <span

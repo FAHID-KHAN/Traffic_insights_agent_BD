@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PolarArea } from 'react-chartjs-2';
 import { api } from '../utils/api';
+import { TIME_BANDS } from '../utils/timeColors';
 import { FaClock } from 'react-icons/fa';
 
 const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => {
@@ -9,14 +10,14 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => {
   return `${h}${suffix}`;
 });
 
-function hourColor(value, max) {
-  if (max === 0) return 'rgba(0,106,78,0.2)';
-  const ratio = value / max;
-  if (ratio > 0.8) return 'rgba(244,42,65,0.75)';
-  if (ratio > 0.6) return 'rgba(239,108,0,0.7)';
-  if (ratio > 0.4) return 'rgba(249,168,37,0.65)';
-  if (ratio > 0.2) return 'rgba(0,168,120,0.6)';
-  return 'rgba(0,106,78,0.25)';
+function hourToBand(h) {
+  if (h === 0)              return 'midnight';
+  if (h >= 1  && h <= 5)   return 'dawn';
+  if (h >= 6  && h <= 10)  return 'morning';
+  if (h >= 11 && h <= 12)  return 'noon';
+  if (h >= 13 && h <= 16)  return 'afternoon';
+  if (h >= 17 && h <= 19)  return 'evening';
+  return 'night';
 }
 
 export default function TimeClockChart() {
@@ -43,15 +44,14 @@ export default function TimeClockChart() {
     const entry = byHour.find(r => r.hour === h);
     return entry ? (metric === 'deaths' ? entry.deaths : entry.accidents) : 0;
   });
-  const maxVal = Math.max(...values, 1);
-  const colors = values.map(v => hourColor(v, maxVal));
+  const bandColors = Array.from({ length: 24 }, (_, h) => TIME_BANDS[hourToBand(h)].color);
 
   const chartData = {
     labels: HOUR_LABELS,
     datasets: [{
       data: values,
-      backgroundColor: colors,
-      borderColor: colors.map(c => c.replace(/[\d.]+\)$/, '1)')),
+      backgroundColor: bandColors.map(c => c + 'aa'),
+      borderColor: bandColors,
       borderWidth: 1,
     }],
   };

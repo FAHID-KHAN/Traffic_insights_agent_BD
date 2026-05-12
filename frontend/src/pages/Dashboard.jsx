@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { api, formatDate, COLORS } from '../utils/api';
+import { TIME_BANDS, PART_ORDER } from '../utils/timeColors';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
 import { FaCarCrash, FaSkullCrossbones, FaUserInjured, FaCalendarDay, FaNewspaper, FaChartArea, FaChartPie, FaChartBar, FaFilter, FaCar, FaClock } from 'react-icons/fa';
@@ -166,26 +167,19 @@ export default function Dashboard() {
       }
 
       // Time-of-day patterns — build chart data + insight badges
-      const PART_ORDER = ['midnight','dawn','morning','noon','afternoon','evening','night'];
-      const PART_EMOJI = { midnight:'🌑', dawn:'🌅', morning:'☀️', noon:'🌞', afternoon:'🌤️', evening:'🌆', night:'🌙' };
-      const PART_COLORS = {
-        midnight:'#6366f1', dawn:'#f97316', morning:'#eab308',
-        noon:'#fbbf24', afternoon:'#06b6d4', evening:'#8b5cf6', night:'#3b82f6',
-      };
-
       const pod = timePatterns?.by_part_of_day || [];
       const byHour = timePatterns?.by_hour || [];
 
       if (pod.length > 0) {
         const ordered = PART_ORDER.map(p => pod.find(r => r.part_of_day === p) || { part_of_day: p, accidents: 0, deaths: 0 });
         setTimePodData({
-          labels: ordered.map(r => `${PART_EMOJI[r.part_of_day]} ${r.part_of_day.charAt(0).toUpperCase() + r.part_of_day.slice(1)}`),
+          labels: ordered.map(r => `${TIME_BANDS[r.part_of_day].emoji} ${TIME_BANDS[r.part_of_day].label}`),
           datasets: [
             {
               label: 'Accidents',
               data: ordered.map(r => r.accidents),
-              backgroundColor: ordered.map(r => PART_COLORS[r.part_of_day] + 'cc'),
-              borderColor: ordered.map(r => PART_COLORS[r.part_of_day]),
+              backgroundColor: ordered.map(r => TIME_BANDS[r.part_of_day].color + 'cc'),
+              borderColor: ordered.map(r => TIME_BANDS[r.part_of_day].color),
               borderWidth: 1,
               borderRadius: 4,
             },
@@ -200,7 +194,6 @@ export default function Dashboard() {
           ],
         });
 
-        // Insight badges
         const worstPart = pod.reduce((a, b) => (b.accidents > (a?.accidents || 0) ? b : a), null);
         const nightAcc = pod.filter(p => ['night','midnight'].includes(p.part_of_day)).reduce((s, p) => s + p.accidents, 0);
         const totalAcc = pod.reduce((s, p) => s + p.accidents, 0);
@@ -208,7 +201,8 @@ export default function Dashboard() {
         const peakHour = byHour.length > 0 ? byHour.reduce((a, b) => (b.accidents > (a?.accidents || 0) ? b : a), null) : null;
         setTimeInsights({
           worstPart: worstPart?.part_of_day,
-          worstEmoji: PART_EMOJI[worstPart?.part_of_day] || '',
+          worstColor: worstPart ? TIME_BANDS[worstPart.part_of_day].color : null,
+          worstEmoji: worstPart ? TIME_BANDS[worstPart.part_of_day].emoji : '',
           worstPartCount: worstPart?.accidents || 0,
           peakHour: peakHour ? fmtHour(peakHour.hour) : null,
           peakHourCount: peakHour?.accidents || 0,
@@ -351,8 +345,13 @@ export default function Dashboard() {
           {/* Insight badges */}
           {timeInsights && (
             <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', margin: '0.75rem 0' }}>
-              {timeInsights.worstPart && (
-                <span className="time-insight-badge">
+              {timeInsights.worstPart && timeInsights.worstColor && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 12px', borderRadius: '999px', fontSize: '0.78rem',
+                  background: timeInsights.worstColor + '22', color: timeInsights.worstColor,
+                  border: `1px solid ${timeInsights.worstColor}44`,
+                }}>
                   {timeInsights.worstEmoji} <strong style={{ textTransform: 'capitalize' }}>{timeInsights.worstPart}</strong> is worst — {timeInsights.worstPartCount} accidents
                 </span>
               )}
@@ -361,7 +360,12 @@ export default function Dashboard() {
                   🕐 Peak hour: <strong>{timeInsights.peakHour}</strong> ({timeInsights.peakHourCount} accidents)
                 </span>
               )}
-              <span className="time-insight-badge">
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '4px 12px', borderRadius: '999px', fontSize: '0.78rem',
+                background: TIME_BANDS.night.color + '22', color: TIME_BANDS.night.color,
+                border: `1px solid ${TIME_BANDS.night.color}44`,
+              }}>
                 🌙 <strong>{timeInsights.nightPct}%</strong> of timed accidents occur at night/midnight
               </span>
               <span className="time-insight-badge" style={{ opacity: 0.6 }}>
