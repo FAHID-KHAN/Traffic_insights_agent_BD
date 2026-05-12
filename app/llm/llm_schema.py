@@ -16,6 +16,8 @@ class AccidentEvent(BaseModel):
     vehicles_involved: list[str] | None = None
     road_name: str | None = None
     accident_date: str | None = None
+    accident_time: str | None = None
+    part_of_day: str | None = None
     summary: str | None = None
     confidence: float | None = None
 
@@ -26,6 +28,8 @@ class AccidentEvent(BaseModel):
         "division",
         "road_name",
         "accident_date",
+        "accident_time",
+        "part_of_day",
         "summary",
         mode="before",
     )

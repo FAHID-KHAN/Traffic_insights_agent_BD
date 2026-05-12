@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { api, formatDate, COLORS } from '../utils/api';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
-import { FaCarCrash, FaSkullCrossbones, FaUserInjured, FaCalendarDay, FaNewspaper, FaChartArea, FaChartPie, FaChartBar, FaFilter } from 'react-icons/fa';
+import { FaCarCrash, FaSkullCrossbones, FaUserInjured, FaCalendarDay, FaNewspaper, FaChartArea, FaChartPie, FaChartBar, FaFilter, FaCar, FaClock } from 'react-icons/fa';
 
 const TIMEFRAMES = [
   { key: '7d',    label: 'Last 7 Days' },
@@ -23,7 +23,7 @@ function getDateRange(key) {
     case '7d':   return { start: fmt(new Date(today.getTime() - 7  * 86400000)), end };
     case '30d':  return { start: fmt(new Date(today.getTime() - 30 * 86400000)), end };
     case '90d':  return { start: fmt(new Date(today.getTime() - 90 * 86400000)), end };
-    case '6m':   return { start: fmt(new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())), end };
+    case '6m':   { const d = new Date(today); d.setMonth(d.getMonth() - 6); return { start: fmt(d), end }; }
     case 'year': return { start: `${today.getFullYear()}-01-01`, end };
     case 'all':  return null;
     default:     return null;
@@ -36,13 +36,16 @@ export default function Dashboard() {
   const [trendData, setTrendData] = useState(null);
   const [typeData, setTypeData] = useState(null);
   const [districtData, setDistrictData] = useState(null);
+  const [vehicleData, setVehicleData] = useState(null);
+  const [timeInsights, setTimeInsights] = useState(null);
+  const [timePodData, setTimePodData] = useState(null);
+  const [timeHourData, setTimeHourData] = useState(null);
   const [timeframe, setTimeframe] = useState('30d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const load = useCallback(async () => {
     try {
-      // Build date-range query string
       let rangeQS = '';
       let trendQS = '';
       if (timeframe === 'custom' && customStart && customEnd) {
@@ -62,10 +65,15 @@ export default function Dashboard() {
       const trendURL = trendQS ? `/trend${trendQS}` : '/trend';
       const zonesURL = rangeQS ? `/danger-zones?limit=10${rangeQS}` : '/danger-zones?limit=10';
 
-      const [ov, trend, zones] = await Promise.all([
+      const vehicleURL = rangeQS ? `/vehicle-analytics?${rangeQS.slice(1)}` : '/vehicle-analytics';
+      const timePatternsURL = trendQS ? `/time-patterns${trendQS}` : '/time-patterns';
+
+      const [ov, trend, zones, vehicles, timePatterns] = await Promise.all([
         api(overviewURL),
         api(trendURL),
         api(zonesURL),
+        api(vehicleURL),
+        api(timePatternsURL),
       ]);
       setOverview(ov);
 
@@ -73,7 +81,6 @@ export default function Dashboard() {
         setLastUpdate(ov.last_scrape.finished_at || 'Running...');
       }
 
-      // Trend chart data
       if (trend.length > 0) {
         setTrendData({
           labels: trend.map((d) => formatDate(d.accident_date)),
@@ -87,13 +94,10 @@ export default function Dashboard() {
         setTrendData(null);
       }
 
-      // Type breakdown from trend data
       if (trend.length > 0) {
         const range = getDateRange(timeframe);
         let monthData;
         if (timeframe === 'custom' && customStart && customEnd) {
-          // For custom ranges use a monthly query for the start month as a proxy,
-          // but better: compute by-type from the overview's date range
           const dt = new Date(customStart);
           monthData = await api(`/monthly?year=${dt.getFullYear()}&month=${dt.getMonth() + 1}`);
         } else if (range) {
@@ -129,6 +133,118 @@ export default function Dashboard() {
         });
       } else {
         setDistrictData(null);
+      }
+
+      // Vehicle chart — now filtered by selected timeframe
+      if (vehicles?.length > 0) {
+        const top = vehicles.slice(0, 8);
+        const vehicleColors = [
+          '#ef4444', '#f97316', '#eab308', '#22c55e',
+          '#06b6d4', '#a855f7', '#ec4899', '#6366f1',
+        ];
+        setVehicleData({
+          labels: top.map(v => v.vehicle),
+          datasets: [
+            {
+              label: 'Accidents',
+              data: top.map(v => v.accidents),
+              backgroundColor: vehicleColors.map(c => c + 'cc'),
+              borderColor: vehicleColors,
+              borderWidth: 1,
+            },
+            {
+              label: 'Deaths',
+              data: top.map(v => v.deaths),
+              backgroundColor: '#ef444433',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+            },
+          ],
+        });
+      } else {
+        setVehicleData(null);
+      }
+
+      // Time-of-day patterns — build chart data + insight badges
+      const PART_ORDER = ['midnight','dawn','morning','noon','afternoon','evening','night'];
+      const PART_EMOJI = { midnight:'🌑', dawn:'🌅', morning:'☀️', noon:'🌞', afternoon:'🌤️', evening:'🌆', night:'🌙' };
+      const PART_COLORS = {
+        midnight:'#6366f1', dawn:'#f97316', morning:'#eab308',
+        noon:'#fbbf24', afternoon:'#06b6d4', evening:'#8b5cf6', night:'#3b82f6',
+      };
+
+      const pod = timePatterns?.by_part_of_day || [];
+      const byHour = timePatterns?.by_hour || [];
+
+      if (pod.length > 0) {
+        const ordered = PART_ORDER.map(p => pod.find(r => r.part_of_day === p) || { part_of_day: p, accidents: 0, deaths: 0 });
+        setTimePodData({
+          labels: ordered.map(r => `${PART_EMOJI[r.part_of_day]} ${r.part_of_day.charAt(0).toUpperCase() + r.part_of_day.slice(1)}`),
+          datasets: [
+            {
+              label: 'Accidents',
+              data: ordered.map(r => r.accidents),
+              backgroundColor: ordered.map(r => PART_COLORS[r.part_of_day] + 'cc'),
+              borderColor: ordered.map(r => PART_COLORS[r.part_of_day]),
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Deaths',
+              data: ordered.map(r => r.deaths),
+              backgroundColor: '#ef444455',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+          ],
+        });
+
+        // Insight badges
+        const worstPart = pod.reduce((a, b) => (b.accidents > (a?.accidents || 0) ? b : a), null);
+        const nightAcc = pod.filter(p => ['night','midnight'].includes(p.part_of_day)).reduce((s, p) => s + p.accidents, 0);
+        const totalAcc = pod.reduce((s, p) => s + p.accidents, 0);
+        const fmtHour = h => { const s = h < 12 ? 'am' : 'pm'; const l = h === 0 ? 12 : h > 12 ? h - 12 : h; return `${l}${s}`; };
+        const peakHour = byHour.length > 0 ? byHour.reduce((a, b) => (b.accidents > (a?.accidents || 0) ? b : a), null) : null;
+        setTimeInsights({
+          worstPart: worstPart?.part_of_day,
+          worstEmoji: PART_EMOJI[worstPart?.part_of_day] || '',
+          worstPartCount: worstPart?.accidents || 0,
+          peakHour: peakHour ? fmtHour(peakHour.hour) : null,
+          peakHourCount: peakHour?.accidents || 0,
+          nightPct: totalAcc > 0 ? Math.round((nightAcc / totalAcc) * 100) : 0,
+          totalWithTime: totalAcc,
+        });
+      } else {
+        setTimePodData(null);
+        setTimeInsights(null);
+      }
+
+      if (byHour.length > 0) {
+        const allHours = Array.from({ length: 24 }, (_, h) => {
+          const entry = byHour.find(r => r.hour === h) || { hour: h, accidents: 0, deaths: 0 };
+          const s = h < 12 ? 'am' : 'pm'; const l = h === 0 ? 12 : h > 12 ? h - 12 : h;
+          return { ...entry, label: `${l}${s}` };
+        });
+        const maxAcc = Math.max(...allHours.map(h => h.accidents), 1);
+        setTimeHourData({
+          labels: allHours.map(h => h.label),
+          datasets: [{
+            label: 'Accidents by Hour',
+            data: allHours.map(h => h.accidents),
+            backgroundColor: allHours.map(h => {
+              const r = h.accidents / maxAcc;
+              if (r > 0.7) return '#ef4444cc';
+              if (r > 0.4) return '#f97316cc';
+              if (r > 0.15) return '#eab308cc';
+              return '#06b6d455';
+            }),
+            borderWidth: 0,
+            borderRadius: 3,
+          }],
+        });
+      } else {
+        setTimeHourData(null);
       }
     } catch (err) {
       console.error('Dashboard error:', err);
@@ -196,6 +312,112 @@ export default function Dashboard() {
           options={{ indexAxis: 'y', plugins: { legend: { display: false } } }}
         />
       </div>
+
+      <div className="charts-grid" style={{ marginTop: '1rem' }}>
+        <ChartCard
+          title={`Vehicles Involved in Accidents (${trendLabel})`}
+          icon={<FaCar />}
+          type="bar"
+          data={vehicleData}
+          fullWidth
+          options={{
+            indexAxis: 'y',
+            plugins: {
+              legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+              tooltip: {
+                callbacks: {
+                  afterLabel: (ctx) => {
+                    const v = vehicleData?.datasets[0]?.data;
+                    const total = v?.reduce((a, b) => a + b, 0) || 1;
+                    return `${((ctx.parsed.x / total) * 100).toFixed(1)}% of total`;
+                  },
+                },
+              },
+            },
+            scales: {
+              x: { stacked: false },
+              y: { stacked: false },
+            },
+          }}
+        />
+      </div>
+
+      {(timePodData || timeHourData) && (
+        <div className="chart-card full-width" style={{ marginTop: '1rem' }}>
+          <div className="chart-title">
+            <FaClock /> Accidents by Time of Day — {trendLabel}
+          </div>
+
+          {/* Insight badges */}
+          {timeInsights && (
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', margin: '0.75rem 0' }}>
+              {timeInsights.worstPart && (
+                <span className="time-insight-badge">
+                  {timeInsights.worstEmoji} <strong style={{ textTransform: 'capitalize' }}>{timeInsights.worstPart}</strong> is worst — {timeInsights.worstPartCount} accidents
+                </span>
+              )}
+              {timeInsights.peakHour && (
+                <span className="time-insight-badge">
+                  🕐 Peak hour: <strong>{timeInsights.peakHour}</strong> ({timeInsights.peakHourCount} accidents)
+                </span>
+              )}
+              <span className="time-insight-badge">
+                🌙 <strong>{timeInsights.nightPct}%</strong> of timed accidents occur at night/midnight
+              </span>
+              <span className="time-insight-badge" style={{ opacity: 0.6 }}>
+                {timeInsights.totalWithTime} accidents with time data
+              </span>
+            </div>
+          )}
+
+          {/* Part-of-day grouped bar chart */}
+          {timePodData && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <ChartCard
+                title=""
+                type="bar"
+                data={timePodData}
+                fullWidth
+                options={{
+                  plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } },
+                  },
+                  scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true },
+                  },
+                }}
+              />
+            </div>
+          )}
+
+          {/* Hour-of-day bar chart */}
+          {timeHourData && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 600 }}>
+                🕐 Accidents by Hour (24h)
+              </div>
+              <ChartCard
+                title=""
+                type="bar"
+                data={timeHourData}
+                fullWidth
+                options={{
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+                    y: { beginAtZero: true },
+                  },
+                }}
+              />
+            </div>
+          )}
+
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
+            Only accidents where time of occurrence was explicitly reported in the article are included.
+          </p>
+        </div>
+      )}
     </>
   );
 }

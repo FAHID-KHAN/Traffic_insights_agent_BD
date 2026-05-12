@@ -77,6 +77,20 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                     },
                     "road_name": {"type": ["string", "null"]},
                     "accident_date": {"type": ["string", "null"]},
+                    "accident_time": {"type": ["string", "null"]},
+                    "part_of_day": {
+                        "type": ["string", "null"],
+                        "enum": [
+                            "midnight",
+                            "dawn",
+                            "morning",
+                            "noon",
+                            "afternoon",
+                            "evening",
+                            "night",
+                            None,
+                        ],
+                    },
                     "summary": {"type": ["string", "null"]},
                     "confidence": {"type": ["number", "null"]},
                 },
@@ -90,6 +104,8 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
                     "vehicles_involved",
                     "road_name",
                     "accident_date",
+                    "accident_time",
+                    "part_of_day",
                     "summary",
                     "confidence",
                 ],
@@ -313,7 +329,9 @@ class LLMAccidentExtractor:
             "\"district\":string|null,\"division\":string|null,\"deaths\":int,"
             "\"injuries\":int,\"vehicles_involved\":string[]|null,"
             "\"road_name\":string|null,"
-            "\"accident_date\":\"YYYY-MM-DD\"|null,\"summary\":string|null,"
+            "\"accident_date\":\"YYYY-MM-DD\"|null,"
+            "\"accident_time\":\"HH:MM\"|null,\"part_of_day\":string|null,"
+            "\"summary\":string|null,"
             "\"confidence\":float|null}]}\n\n"
             "Rules:\n"
             "- Return ONLY JSON.\n"
@@ -343,6 +361,12 @@ class LLMAccidentExtractor:
             "- If multiple accidents are described, return multiple entries.\n"
             "- Do not invent counts; if unclear use 0.\n"
             "- Set accident_date to null. Backend will assign article published date as canonical event date.\n"
+            "- Extract accident_time only when the article states the accident occurrence time. Use null otherwise.\n"
+            "- accident_time must be a strict 24-hour HH:MM time when known, converted from AM/PM if needed.\n"
+            "- Do not use rescue time, police arrival time, hospital arrival time, or death-at-hospital time as accident_time.\n"
+            "- part_of_day must be one of midnight, dawn, morning, noon, afternoon, evening, night, or null.\n"
+            "- If exact occurrence time is known, set accident_time and the matching part_of_day. "
+            "If only textual occurrence timing is stated, set part_of_day and leave accident_time null.\n"
             "- vehicles_involved should be canonical tokens (bus, truck, car, motorcycle, train, boat, auto-rickshaw, rickshaw, microbus, pickup, ambulance).\n"
             "- summary should be concise and <= 200 characters.\n\n"
             "Article:\n"
@@ -453,6 +477,8 @@ class LLMAccidentExtractor:
                 "injuries": event.injuries,
                 "vehicles_involved": event.vehicles_involved,
                 "road_name": event.road_name,
+                "accident_time": event.accident_time,
+                "part_of_day": event.part_of_day,
                 "summary": event.summary,
             },
         }

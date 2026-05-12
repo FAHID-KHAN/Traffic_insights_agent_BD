@@ -39,6 +39,21 @@ class TestAccidentCRUD:
         acc_id = db.insert_accident(article_id=aid)
         assert acc_id >= 1
 
+    def test_insert_accident_time_metadata(self):
+        aid = db.insert_article("https://x.com/time", "T", "C", date(2025, 1, 1))
+        acc_id = db.insert_accident(
+            article_id=aid,
+            accident_time="17:30",
+            part_of_day="evening",
+        )
+        with db.get_db() as conn:
+            row = conn.execute(
+                "SELECT accident_time, part_of_day FROM accidents WHERE id = ?",
+                (acc_id,),
+            ).fetchone()
+        assert row["accident_time"] == "17:30"
+        assert row["part_of_day"] == "evening"
+
 
 class TestScrapeLog:
     def test_start_and_finish_log(self):

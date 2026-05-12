@@ -138,6 +138,11 @@ Before scoring or insertion, the event is normalized:
 - `division` is derived from district when missing.
 - `latitude` and `longitude` are assigned from `DISTRICT_COORDINATES`.
 - `vehicles_involved` is converted from list to comma-separated string.
+- `accident_time` is accepted only as a strict occurrence time and normalized to `HH:MM`.
+- `part_of_day` is derived from `accident_time` when a strict time exists, or normalized from textual aliases such as `early morning` to fixed labels.
+- Rescue, police arrival, hospital arrival, and death-at-hospital times must not be stored as accident occurrence time.
+
+Time metadata is stored in nullable `accidents.accident_time` and `accidents.part_of_day` columns. There is no historical backfill; existing rows may remain null until fresh extraction produces these fields. Raw LLM responses in `data/llm_extraction_responses.log` preserve the returned fields, and skipped event snapshots in `data/non_incident_report.log` include time metadata for QA.
 - `road_name` is normalized through `normalize_road_name(...)`.
 - `accident_date` is set from article `published_date`.
 
@@ -438,4 +443,3 @@ Use these after changing dedupe, extraction guardrails, or workflow docs:
 python3 -m compileall app run.py
 .venv/bin/pytest tests/test_dedupe.py tests/test_extractor.py -q
 ```
-

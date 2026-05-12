@@ -486,6 +486,175 @@ class TestLLMNullHandling:
         assert rows[0]["road_name"] == "Dhaka-Mymensingh Highway"
         assert not log_path.exists()
 
+    def test_strict_time_stores_time_and_derived_part(self, sample_article_id, tmp_path, monkeypatch):
+        log_path = tmp_path / "llm_extraction_responses.log"
+        monkeypatch.setattr(llm_extractor_module, "_RESPONSE_LOG_PATH", log_path)
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "bus crash",
+                            "location_raw": "Gazipur",
+                            "district": "Gazipur",
+                            "division": "Dhaka",
+                            "deaths": 1,
+                            "injuries": 2,
+                            "vehicles_involved": ["bus"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "accident_time": "12.30 PM",
+                            "part_of_day": None,
+                            "summary": "A bus crash in Gazipur killed one and injured two.",
+                            "confidence": 0.9,
+                        }
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "Concrete accident coverage with occurrence time, district, and casualties.",
+            date(2025, 6, 1),
+        )
+
+        with db.get_db() as conn:
+            row = conn.execute(
+                "SELECT accident_time, part_of_day FROM accidents WHERE id = ?",
+                (inserted[0],),
+            ).fetchone()
+        assert row["accident_time"] == "12:30"
+        assert row["part_of_day"] == "noon"
+        log_text = log_path.read_text()
+        assert '"accident_time": "12.30 PM"' in log_text
+        assert '"part_of_day": null' in log_text
+
+    def test_text_only_part_stores_normalized_part_and_null_time(self, sample_article_id):
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "truck crash",
+                            "location_raw": "Tangail",
+                            "district": "Tangail",
+                            "division": "Dhaka",
+                            "deaths": 1,
+                            "injuries": 0,
+                            "vehicles_involved": ["truck"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "accident_time": None,
+                            "part_of_day": "early morning",
+                            "summary": "A truck crash in Tangail killed one.",
+                            "confidence": 0.9,
+                        }
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "Concrete accident coverage with enough article text to reach the LLM extractor.",
+            date(2025, 6, 1),
+        )
+
+        with db.get_db() as conn:
+            row = conn.execute(
+                "SELECT accident_time, part_of_day FROM accidents WHERE id = ?",
+                (inserted[0],),
+            ).fetchone()
+        assert row["accident_time"] is None
+        assert row["part_of_day"] == "dawn"
+
+    def test_missing_time_info_stores_nulls(self, sample_article_id):
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "road crash",
+                            "location_raw": "Dhaka",
+                            "district": "Dhaka",
+                            "division": "Dhaka",
+                            "deaths": 1,
+                            "injuries": 0,
+                            "vehicles_involved": ["bus"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "accident_time": None,
+                            "part_of_day": None,
+                            "summary": "A road crash in Dhaka killed one.",
+                            "confidence": 0.9,
+                        }
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "Concrete accident coverage with enough article text to reach the LLM extractor.",
+            date(2025, 6, 1),
+        )
+
+        with db.get_db() as conn:
+            row = conn.execute(
+                "SELECT accident_time, part_of_day FROM accidents WHERE id = ?",
+                (inserted[0],),
+            ).fetchone()
+        assert row["accident_time"] is None
+        assert row["part_of_day"] is None
+
+    def test_rescue_or_hospital_times_are_not_accepted_without_accident_time(self, sample_article_id):
+        extractor = LLMAccidentExtractor(
+            client=_FakeLLMClient(
+                {
+                    "article_type": "daily_incident",
+                    "skip_reason": None,
+                    "accidents": [
+                        {
+                            "accident_type": "road crash",
+                            "location_raw": "Dhaka",
+                            "district": "Dhaka",
+                            "division": "Dhaka",
+                            "deaths": 1,
+                            "injuries": 1,
+                            "vehicles_involved": ["bus"],
+                            "road_name": None,
+                            "accident_date": None,
+                            "accident_time": None,
+                            "part_of_day": None,
+                            "summary": "Police arrived at 4:00 pm and the victim died at hospital at 6:00 pm.",
+                            "confidence": 0.9,
+                        }
+                    ],
+                }
+            )
+        )
+
+        inserted = extractor.process_article(
+            sample_article_id,
+            "A concrete crash report says police arrived at 4:00 pm and the victim died at hospital at 6:00 pm.",
+            date(2025, 6, 1),
+        )
+
+        with db.get_db() as conn:
+            row = conn.execute(
+                "SELECT accident_time, part_of_day FROM accidents WHERE id = ?",
+                (inserted[0],),
+            ).fetchone()
+        assert row["accident_time"] is None
+        assert row["part_of_day"] is None
+
     def test_keeps_valid_daily_multi_location_incidents(
         self,
         sample_article_id,

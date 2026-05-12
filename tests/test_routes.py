@@ -38,6 +38,8 @@ def _seed(n=3):
             deaths=i + 1,
             injuries=(i + 1) * 2,
             accident_date=d,
+            accident_time=f"{8 + i:02d}:30",
+            part_of_day="morning",
             summary=f"Test accident {i}",
         )
 
@@ -291,6 +293,10 @@ class TestTimePatterns:
         data = r.json()
         assert "by_dow" in data
         assert "by_month" in data
+        assert "by_part_of_day" in data
+        assert "by_hour" in data
+        assert data["by_part_of_day"][0]["part_of_day"] == "morning"
+        assert data["by_hour"][0]["hour"] == 8
 
 
 @pytest.mark.asyncio

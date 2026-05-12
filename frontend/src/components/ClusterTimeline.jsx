@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, formatDate } from '../utils/api';
-import { FaLayerGroup, FaExclamationTriangle, FaSkullCrossbones, FaMapMarkerAlt, FaCalendarAlt, FaSlidersH, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaLayerGroup, FaExclamationTriangle, FaSkullCrossbones, FaMapMarkerAlt, FaCalendarAlt, FaSlidersH, FaChevronDown, FaChevronUp, FaSync } from 'react-icons/fa';
+
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 const SEVERITY_CONFIG = {
   critical: { color: '#F42A41', bg: 'rgba(244,42,65,0.12)', label: 'Critical', icon: <FaSkullCrossbones /> },
@@ -16,17 +18,22 @@ export default function ClusterTimeline() {
   const [minAccidents, setMinAccidents] = useState(3);
   const [expanded, setExpanded] = useState(new Set());
   const [showSettings, setShowSettings] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const intervalRef = useRef(null);
 
   const load = useCallback(() => {
     setLoading(true);
     api(`/clusters?window_days=${windowDays}&min_accidents=${minAccidents}`)
-      .then(setClusters)
+      .then(data => { setClusters(data); setLastUpdated(new Date()); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [windowDays, minAccidents]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(); // eslint-disable-line react-hooks/set-state-in-effect
+    intervalRef.current = setInterval(load, AUTO_REFRESH_MS);
+    return () => clearInterval(intervalRef.current);
+  }, [load]);
 
   const toggleExpand = (id) => {
     setExpanded(prev => {
@@ -55,9 +62,19 @@ export default function ClusterTimeline() {
           {criticalCount > 0 && <span className="cluster-pill critical">{criticalCount} Critical</span>}
           {highCount > 0 && <span className="cluster-pill high">{highCount} High</span>}
         </div>
-        <button className="fc-chip" onClick={() => setShowSettings(!showSettings)}>
-          <FaSlidersH /> Settings
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {lastUpdated && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button className="fc-chip" onClick={load} disabled={loading} title="Refresh now">
+            <FaSync className={loading ? 'spin' : ''} />
+          </button>
+          <button className="fc-chip" onClick={() => setShowSettings(!showSettings)}>
+            <FaSlidersH /> Settings
+          </button>
+        </div>
       </div>
 
       {showSettings && (

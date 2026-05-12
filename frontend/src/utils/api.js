@@ -12,6 +12,17 @@ export async function postApi(endpoint) {
   return res.json();
 }
 
+export async function adminGet(endpoint, adminKey) {
+  const res = await fetch(`${BASE}${endpoint}`, {
+    headers: { 'X-Admin-Key': adminKey },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function adminPost(endpoint, adminKey) {
   const res = await fetch(`${BASE}${endpoint}`, {
     method: 'POST',

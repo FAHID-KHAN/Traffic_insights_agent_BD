@@ -69,6 +69,8 @@ def init_db():
             vehicles_involved TEXT,
             road_name TEXT,
             accident_date DATE,
+            accident_time TEXT,
+            part_of_day TEXT,
             summary TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (article_id) REFERENCES articles(id)
@@ -88,12 +90,18 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_accidents_division ON accidents(division);
         CREATE INDEX IF NOT EXISTS idx_accidents_type ON accidents(accident_type);
         CREATE INDEX IF NOT EXISTS idx_accidents_article ON accidents(article_id);
+        CREATE INDEX IF NOT EXISTS idx_accidents_part_of_day ON accidents(part_of_day);
+        CREATE INDEX IF NOT EXISTS idx_accidents_time ON accidents(accident_time);
         CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
         CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_date);
     """)
 
     # ── Schema migrations for existing databases ──
     _migrate_add_column(cursor, "accidents", "road_name", "TEXT")
+    _migrate_add_column(cursor, "accidents", "accident_time", "TEXT")
+    _migrate_add_column(cursor, "accidents", "part_of_day", "TEXT")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_accidents_part_of_day ON accidents(part_of_day)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_accidents_time ON accidents(accident_time)")
 
     conn.commit()
     conn.close()
@@ -189,18 +197,19 @@ def insert_accident(article_id: int, accident_type: str = None,
                     longitude: float = None, deaths: int = 0,
                     injuries: int = 0, vehicles_involved: str = None,
                     road_name: str = None,
-                    accident_date: date = None, summary: str = None) -> int:
+                    accident_date: date = None, accident_time: str = None,
+                    part_of_day: str = None, summary: str = None) -> int:
     """Insert an accident record and return its ID."""
     with get_db() as conn:
         cursor = conn.execute(
             """INSERT INTO accidents
                (article_id, accident_type, location_raw, district, division,
                 latitude, longitude, deaths, injuries, vehicles_involved,
-                road_name, accident_date, summary)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                road_name, accident_date, accident_time, part_of_day, summary)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (article_id, accident_type, location_raw, district, division,
              latitude, longitude, deaths, injuries, vehicles_involved,
-             road_name, accident_date, summary)
+             road_name, accident_date, accident_time, part_of_day, summary)
         )
         return cursor.lastrowid
 
@@ -346,7 +355,11 @@ def get_recent_accidents(limit: int = 50):
     """Get most recent accident records with article info."""
     with get_db() as conn:
         rows = conn.execute(
-            """SELECT a.*, ar.title as article_title, ar.url as article_url
+            """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                      a.district, a.division, a.latitude, a.longitude,
+                      a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                      a.accident_date, a.summary, a.created_at,
+                      ar.title as article_title, ar.url as article_url
                FROM accidents a
                JOIN articles ar ON a.article_id = ar.id
                ORDER BY a.accident_date DESC, a.created_at DESC

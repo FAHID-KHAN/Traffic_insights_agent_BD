@@ -17,8 +17,9 @@ The original architecture is preserved:
 - Non-incident/report/editorial/null LLM events are also discarded before accident insert and logged.
 - Fresh scrapes now store the correct article-specific published date from New Age article pages.
 - `accidents.accident_date` continues to inherit `articles.published_date`.
+- Fresh LLM extraction can populate nullable `accidents.accident_time` and `accidents.part_of_day` occurrence metadata.
 - The UI continues reading from the same DB-backed APIs.
-- The DB schema, UI contract, and LLM integration style remain unchanged.
+- Existing recent/records/map/search/export API response shapes remain unchanged except `/api/time-patterns`, which includes time metadata analytics.
 
 ## Current Workflow
 
@@ -39,6 +40,9 @@ The original architecture is preserved:
 ## Enforced Constraints and Guardrails
 
 - `accident_date` is always taken from `articles.published_date`.
+- `accident_time` is stored only when a strict accident occurrence time is available and is normalized to `HH:MM`.
+- `part_of_day` uses fixed labels: `midnight`, `dawn`, `morning`, `noon`, `afternoon`, `evening`, or `night`.
+- Rescue, police arrival, hospital arrival, and death-at-hospital times are not accepted as accident occurrence time.
 - `published_date` is extracted from the article-specific publish timestamp, not from generic page-level dates.
 - LLM-provided event dates are ignored during DB insert.
 - District values must resolve to backend-supported districts or be stored as `null`.
@@ -157,6 +161,8 @@ This log is intended to help QA and future tuning of false positives and false n
 - Check `articles` contains correct `url`, `title`, `content`, and `published_date`.
 - Check `accidents` rows reflect extracted deaths, injuries, district, and summary data.
 - Check `accident_date` matches `articles.published_date`.
+- Check populated `accident_time` values use `HH:MM` and populated `part_of_day` values use the fixed label set.
+- Check `/api/time-patterns` returns `by_part_of_day` and `by_hour`.
 - Check article dates in DB match the published date shown on the live New Age article page.
 - Check aggregate-report headlines do not create accident rows.
 - Check skipped non-incident, time-window roundup, and outside-Bangladesh articles/events appear in `data/non_incident_report.log`.

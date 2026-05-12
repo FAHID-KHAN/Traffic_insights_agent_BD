@@ -30,7 +30,7 @@ export default function RoadAnalysis() {
       <div className="road-analysis-section">
         <h3 className="section-title"><FaRoad /> Dangerous Roads &amp; Highways</h3>
         <div className="empty-state" style={{ padding: '2rem' }}>
-          <p>No road/highway data available yet. Road names are extracted from new articles as they are scraped.</p>
+          <p>No road/highway data available yet. Road names are extracted from new articles as they are scanned.</p>
         </div>
       </div>
     );

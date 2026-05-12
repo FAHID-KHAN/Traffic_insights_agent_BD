@@ -20,10 +20,21 @@ function getHeatOpacity(value, max) {
   return 0.2 + (value / max) * 0.8;
 }
 
+const PART_OF_DAY_META = {
+  midnight:  { label: 'Midnight',  emoji: '🌑', color: '#6366f1' },
+  dawn:      { label: 'Dawn',      emoji: '🌅', color: '#f97316' },
+  morning:   { label: 'Morning',   emoji: '☀️', color: '#eab308' },
+  noon:      { label: 'Noon',      emoji: '🌞', color: '#fbbf24' },
+  afternoon: { label: 'Afternoon', emoji: '🌤️', color: '#06b6d4' },
+  evening:   { label: 'Evening',   emoji: '🌆', color: '#8b5cf6' },
+  night:     { label: 'Night',     emoji: '🌙', color: '#3b82f6' },
+};
+const PART_ORDER = ['midnight','dawn','morning','noon','afternoon','evening','night'];
+
 export default function TimeHeatmap() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('month-dow'); // 'month-dow' | 'week-dow' | 'dow-bar'
+  const [view, setView] = useState('month-dow');
   const [metric, setMetric] = useState('accidents');
 
   useEffect(() => {
@@ -36,7 +47,7 @@ export default function TimeHeatmap() {
   if (loading) return <div className="chart-card full-width"><div className="loading-pulse">Loading heatmap...</div></div>;
   if (!data) return null;
 
-  const { by_dow, by_month, grid, week_grid } = data;
+  const { by_dow, by_month, grid, week_grid, by_part_of_day = [], by_hour = [] } = data;
 
   // Build Month x DOW heatmap
   const renderMonthDowGrid = () => {
@@ -177,6 +188,73 @@ export default function TimeHeatmap() {
     );
   };
 
+  // Part-of-day bar
+  const renderPartOfDayBar = () => {
+    const maxVal = Math.max(...by_part_of_day.map(d => metric === 'deaths' ? d.deaths : d.accidents), 1);
+    return (
+      <div className="dow-bars">
+        {PART_ORDER.map(part => {
+          const meta = PART_OF_DAY_META[part];
+          const entry = by_part_of_day.find(d => d.part_of_day === part) || { accidents: 0, deaths: 0 };
+          const val = metric === 'deaths' ? entry.deaths : entry.accidents;
+          const pct = (val / maxVal) * 100;
+          return (
+            <div key={part} className="dow-bar-row">
+              <span className="dow-bar-label" style={{ minWidth: '80px' }}>
+                {meta.emoji} {meta.label}
+              </span>
+              <div className="dow-bar-track">
+                <div
+                  className="dow-bar-fill"
+                  style={{ width: `${pct}%`, backgroundColor: meta.color, opacity: 0.8 }}
+                />
+              </div>
+              <span className="dow-bar-value">{val}</span>
+            </div>
+          );
+        })}
+        {by_part_of_day.length === 0 && (
+          <p style={{ color: 'var(--text-muted)', padding: '1rem' }}>
+            No time-of-day data yet — will populate as new articles are scanned.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // Hour-of-day bar
+  const renderHourBar = () => {
+    const maxVal = Math.max(...by_hour.map(d => metric === 'deaths' ? d.deaths : d.accidents), 1);
+    return (
+      <div className="dow-bars">
+        {Array.from({ length: 24 }, (_, h) => {
+          const entry = by_hour.find(d => d.hour === h) || { accidents: 0, deaths: 0 };
+          const val = metric === 'deaths' ? entry.deaths : entry.accidents;
+          const pct = (val / maxVal) * 100;
+          const suffix = h < 12 ? 'am' : 'pm';
+          const label = `${h === 0 ? 12 : h > 12 ? h - 12 : h}${suffix}`;
+          return (
+            <div key={h} className="dow-bar-row">
+              <span className="dow-bar-label" style={{ minWidth: '50px', fontSize: '0.78rem' }}>{label}</span>
+              <div className="dow-bar-track">
+                <div
+                  className="dow-bar-fill"
+                  style={{ width: `${pct}%`, backgroundColor: getHeatColor(val, maxVal) }}
+                />
+              </div>
+              <span className="dow-bar-value">{val || ''}</span>
+            </div>
+          );
+        })}
+        {by_hour.length === 0 && (
+          <p style={{ color: 'var(--text-muted)', padding: '1rem' }}>
+            No hour data yet — will populate as new articles are scanned.
+          </p>
+        )}
+      </div>
+    );
+  };
+
   // Monthly bar
   const renderMonthBar = () => {
     const maxVal = Math.max(...by_month.map(d => metric === 'deaths' ? d.deaths : d.accidents), 1);
@@ -226,6 +304,12 @@ export default function TimeHeatmap() {
           <button className={`fc-chip${view === 'month-bar' ? ' active' : ''}`} onClick={() => setView('month-bar')}>
             <FaExchangeAlt /> By Month
           </button>
+          <button className={`fc-chip${view === 'part-of-day' ? ' active' : ''}`} onClick={() => setView('part-of-day')}>
+            🌙 Part of Day
+          </button>
+          <button className={`fc-chip${view === 'hour' ? ' active' : ''}`} onClick={() => setView('hour')}>
+            🕐 By Hour
+          </button>
         </div>
         <div className="forecast-metric-chips">
           {['accidents', 'deaths'].map(m => (
@@ -241,6 +325,8 @@ export default function TimeHeatmap() {
         {view === 'week-dow' && renderWeekDowGrid()}
         {view === 'dow-bar' && renderDowBar()}
         {view === 'month-bar' && renderMonthBar()}
+        {view === 'part-of-day' && renderPartOfDayBar()}
+        {view === 'hour' && renderHourBar()}
       </div>
     </div>
   );

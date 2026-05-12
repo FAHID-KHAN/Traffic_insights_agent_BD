@@ -3,8 +3,8 @@ import { FaLinkedin, FaRobot, FaNewspaper, FaMapMarkerAlt, FaProjectDiagram, FaC
 const features = [
   {
     icon: <FaNewspaper />,
-    title: 'Automated News Scraping',
-    desc: 'A custom scraper continuously monitors leading Bangladeshi newspapers, collecting road accident reports around the clock without manual effort.',
+    title: 'Automated News Scanning',
+    desc: 'A custom scanner continuously monitors leading Bangladeshi newspapers, collecting road accident reports around the clock without manual effort.',
   },
   {
     icon: <FaBrain />,
@@ -37,7 +37,7 @@ const creators = [
   {
     name: 'Rafeed Chowdhury',
     role: 'AI Software Developer',
-    bio: 'Rafeed has developed the llm pipeline and scrapping architecture behind Traffic Insight BD\'s AI extraction pipeline. With a deep interest in applied machine learning and LLM, he designed the system that turns raw news text into structured, actionable safety data. He believes that AI should serve real-world problems — and road safety in Bangladesh is one that demands attention.',
+    bio: 'Rafeed has developed the llm pipeline and scanning architecture behind Traffic Insight BD\'s AI extraction pipeline. With a deep interest in applied machine learning and LLM, he designed the system that turns raw news text into structured, actionable safety data. He believes that AI should serve real-world problems — and road safety in Bangladesh is one that demands attention.',
     linkedin: 'https://www.linkedin.com/in/rafeedcse94/',
   },
   {
@@ -106,7 +106,7 @@ export default function About() {
           </p>
           <p>
             That question became Traffic Insight BD. What started as a weekend experiment with web
-            scraping and GPT quickly grew into a full-fledged platform — one that we believe can
+            scanning and GPT quickly grew into a full-fledged platform — one that we believe can
             contribute to saving lives by making road safety data visible, accessible, and actionable.
           </p>
         </div>

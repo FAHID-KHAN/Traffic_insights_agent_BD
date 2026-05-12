@@ -285,7 +285,7 @@ Every route handler wraps its queries in `with db.get_db() as conn:`. This ensur
 
 **WAL mode**: `PRAGMA journal_mode=WAL` is set on every connection. This allows concurrent reads while a write is in progress — important because the background scheduler writes while API requests read.
 
-**Performance indexes**: separate indexes on `accident_date`, `district`, `division`, `accident_type`, and `article_id` keep queries fast even as the dataset grows.
+**Performance indexes**: separate indexes on `accident_date`, `district`, `division`, `accident_type`, `article_id`, `part_of_day`, and `accident_time` keep common dashboard and analytics queries fast even as the dataset grows.
 
 ---
 
@@ -371,7 +371,7 @@ All prefixed `/api` via `router = APIRouter(prefix="/api")`.
 | `GET` | `/api/search/advanced` | Filter by district, type, date range, min casualties |
 | `GET` | `/api/alerts/high-severity` | Accidents with deaths ≥ threshold in recent N days |
 | `GET` | `/api/forecast` | Simple linear-regression accident count forecast |
-| `GET` | `/api/time-patterns` | Accidents grouped by hour-of-day and day-of-week |
+| `GET` | `/api/time-patterns` | Accidents grouped by day/month grids plus part-of-day and hour-of-day |
 | `GET` | `/api/export/csv` | Download all accident records as a CSV file |
 | `GET` | `/api/reports` | Community-submitted reports |
 | `POST` | `/api/reports` | Submit a new community report (with optional images) |
@@ -669,7 +669,14 @@ Returns: linear regression projection of accident counts for next N days.
 
 ### `/api/time-patterns`
 **GET**  
-Returns: 7×24 matrix of accident counts by `{ hour_of_day, day_of_week }`.
+Returns:
+
+- `by_dow`: accident/death/injury totals grouped by day of week.
+- `by_month`: accident/death/injury totals grouped by month.
+- `grid`: month × day-of-week heatmap rows.
+- `week_grid`: week-of-month × day-of-week heatmap rows.
+- `by_part_of_day`: accident/death/injury totals grouped by `midnight`, `dawn`, `morning`, `noon`, `afternoon`, `evening`, and `night`.
+- `by_hour`: accident/death/injury totals grouped by hour from stored `accident_time`.
 
 ### `/api/search`
 **GET** `?q=text&limit=50`  
@@ -724,6 +731,8 @@ CREATE TABLE accidents (
     vehicles_involved TEXT,
     road_name         TEXT,
     accident_date     DATE,
+    accident_time     TEXT,
+    part_of_day       TEXT,
     summary           TEXT,
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (article_id) REFERENCES articles(id)
@@ -777,6 +786,8 @@ idx_accidents_district   ON accidents(district)
 idx_accidents_division   ON accidents(division)
 idx_accidents_type       ON accidents(accident_type)
 idx_accidents_article    ON accidents(article_id)
+idx_accidents_part_of_day ON accidents(part_of_day)
+idx_accidents_time       ON accidents(accident_time)
 idx_articles_url         ON articles(url)
 idx_articles_published   ON articles(published_date)
 idx_reports_district     ON reports(district)

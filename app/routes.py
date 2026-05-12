@@ -132,7 +132,7 @@ async def get_danger_zones(
         with db.get_db() as conn:
             rows = conn.execute(
                 """SELECT district, division, COUNT(*) as total_accidents,
-                          SUM(deaths) as total_deaths, SUM(injuries) as total_injuries,
+                          COALESCE(SUM(deaths), 0) as total_deaths, COALESCE(SUM(injuries), 0) as total_injuries,
                           AVG(latitude) as avg_lat, AVG(longitude) as avg_lon
                    FROM accidents
                    WHERE district IS NOT NULL AND accident_date BETWEEN ? AND ?
@@ -171,7 +171,12 @@ async def get_records(
                 (like, like, like, like, like),
             ).fetchone()["c"]
             rows = conn.execute(
-                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                          a.district, a.division, a.latitude, a.longitude,
+                          a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                          a.accident_date, a.accident_time, a.part_of_day,
+                          a.summary, a.created_at,
+                          ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
                    WHERE a.district LIKE ? OR a.location_raw LIKE ?
@@ -186,7 +191,12 @@ async def get_records(
                 "SELECT COUNT(*) as c FROM accidents"
             ).fetchone()["c"]
             rows = conn.execute(
-                """SELECT a.*, ar.title as article_title, ar.url as article_url
+                """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                          a.district, a.division, a.latitude, a.longitude,
+                          a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                          a.accident_date, a.accident_time, a.part_of_day,
+                          a.summary, a.created_at,
+                          ar.title as article_title, ar.url as article_url
                    FROM accidents a
                    JOIN articles ar ON a.article_id = ar.id
                    ORDER BY a.accident_date DESC, a.id DESC
@@ -254,6 +264,137 @@ async def health_check():
 @router.get("/scrape-logs")
 async def get_scrape_logs(limit: int = Query(20, ge=1, le=100)):
     return db.get_scrape_logs(limit)
+
+
+# ─── Admin Log Endpoints ───────────────────────────────────────
+
+def _read_jsonl_log(path, limit: int) -> list:
+    """Read the last N valid JSON lines from a log file, most-recent first."""
+    import json
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        lines = [l.strip() for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+        result = []
+        for line in reversed(lines):
+            if len(result) >= limit:
+                break
+            try:
+                result.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return result
+    except OSError:
+        return []
+
+
+@router.get("/admin/log-stats")
+async def get_admin_log_stats(_=Depends(verify_admin_key)):
+    """Summary counts across all log files."""
+    import json
+    from pathlib import Path
+    from app.config import DATA_DIR
+
+    discard_path = Path(DATA_DIR) / "non_incident_report.log"
+    dedupe_path  = Path(DATA_DIR) / "dedupe" / "accident_dedupe_decisions.log"
+    ambig_path   = Path(DATA_DIR) / "dedupe" / "accident_dedupe_ambiguity.log"
+    update_path  = Path(DATA_DIR) / "dedupe" / "accident_update_events.log"
+
+    def parse_all(p):
+        if not p.exists():
+            return []
+        rows = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return rows
+
+    discards = parse_all(discard_path)
+    decisions = parse_all(dedupe_path)
+
+    discard_by_reason: dict = {}
+    for d in discards:
+        r = d.get("reason", "unknown")
+        discard_by_reason[r] = discard_by_reason.get(r, 0) + 1
+
+    decision_by_type: dict = {}
+    for d in decisions:
+        dec = d.get("decision", "unknown")
+        decision_by_type[dec] = decision_by_type.get(dec, 0) + 1
+
+    def count_lines(p):
+        try:
+            return sum(1 for l in p.read_text(encoding="utf-8").splitlines() if l.strip())
+        except OSError:
+            return 0
+
+    return {
+        "total_discards": len(discards),
+        "discard_by_reason": discard_by_reason,
+        "total_dedupe_decisions": len(decisions),
+        "decision_by_type": decision_by_type,
+        "ambiguous_count": count_lines(ambig_path),
+        "update_count": count_lines(update_path),
+    }
+
+
+@router.get("/admin/discard-log")
+async def get_discard_log(
+    limit: int = Query(50, ge=1, le=500),
+    reason: Optional[str] = Query(None),
+    _=Depends(verify_admin_key),
+):
+    """Articles discarded by the LLM (outside_bangladesh, non_incident_report, time_window_roundup)."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    rows = _read_jsonl_log(Path(DATA_DIR) / "non_incident_report.log", limit * 3)
+    if reason:
+        rows = [r for r in rows if r.get("reason") == reason]
+    return rows[:limit]
+
+
+@router.get("/admin/dedupe-decisions")
+async def get_dedupe_decisions(
+    limit: int = Query(50, ge=1, le=500),
+    decision: Optional[str] = Query(None),
+    _=Depends(verify_admin_key),
+):
+    """All dedupe decisions — inserted, updated, ambiguous."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    rows = _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_dedupe_decisions.log", limit * 3)
+    if decision:
+        rows = [r for r in rows if r.get("decision") == decision]
+    return rows[:limit]
+
+
+@router.get("/admin/dedupe-ambiguity")
+async def get_dedupe_ambiguity(
+    limit: int = Query(30, ge=1, le=200),
+    _=Depends(verify_admin_key),
+):
+    """Ambiguous possible-duplicate insertions that need manual review."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    return _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_dedupe_ambiguity.log", limit)
+
+
+@router.get("/admin/update-events")
+async def get_update_events(
+    limit: int = Query(30, ge=1, le=200),
+    _=Depends(verify_admin_key),
+):
+    """Records that were merged/updated by the dedupe pipeline."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    return _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_update_events.log", limit)
 
 
 @router.post("/scrape")
@@ -439,7 +580,7 @@ async def compare_monthly(
             ).fetchall()
             by_district = conn.execute(
                 """SELECT district, COUNT(*) as count,
-                          SUM(deaths) as deaths
+                          COALESCE(SUM(deaths), 0) as deaths
                    FROM accidents
                    WHERE strftime('%Y-%m', accident_date) = ? AND district IS NOT NULL
                    GROUP BY district ORDER BY count DESC LIMIT 10""",
@@ -447,7 +588,7 @@ async def compare_monthly(
             ).fetchall()
             daily = conn.execute(
                 """SELECT CAST(strftime('%d', accident_date) AS INTEGER) as day,
-                          COUNT(*) as accidents, SUM(deaths) as deaths
+                          COUNT(*) as accidents, COALESCE(SUM(deaths), 0) as deaths
                    FROM accidents
                    WHERE strftime('%Y-%m', accident_date) = ?
                    GROUP BY day ORDER BY day""",
@@ -484,7 +625,7 @@ async def compare_yearly(
             by_month = conn.execute(
                 """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                           COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE strftime('%Y', accident_date) = ?
                    GROUP BY month ORDER BY month""",
@@ -651,7 +792,11 @@ async def search_accidents(
 ):
     with db.get_db() as conn:
         rows = conn.execute(
-            """SELECT a.*, ar.title as article_title, ar.url as article_url
+            """SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                      a.district, a.division, a.latitude, a.longitude,
+                      a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                      a.accident_date, a.summary, a.created_at,
+                      ar.title as article_title, ar.url as article_url
                FROM accidents a
                JOIN articles ar ON a.article_id = ar.id
                WHERE a.district LIKE ? OR a.location_raw LIKE ?
@@ -674,7 +819,7 @@ async def get_trend(
         if start and end:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE accident_date BETWEEN ? AND ?
                    GROUP BY accident_date
@@ -684,7 +829,7 @@ async def get_trend(
         elif days:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    WHERE accident_date >= date('now', ? || ' days')
                    GROUP BY accident_date
@@ -694,7 +839,7 @@ async def get_trend(
         else:
             rows = conn.execute(
                 """SELECT accident_date, COUNT(*) as accidents,
-                          SUM(deaths) as deaths, SUM(injuries) as injuries
+                          COALESCE(SUM(deaths), 0) as deaths, COALESCE(SUM(injuries), 0) as injuries
                    FROM accidents
                    GROUP BY accident_date
                    ORDER BY accident_date"""
@@ -732,11 +877,12 @@ async def search_advanced(
     district: Optional[str] = Query(None),
     type: Optional[str] = Query(None, alias="type"),
     severity: Optional[str] = Query(None),
+    part_of_day: Optional[str] = Query(None),
     start: Optional[str] = Query(None),
     end: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
-    """Full-text search with optional district, type, severity, date filters."""
+    """Full-text search with optional district, type, severity, time-of-day, and date filters."""
     with db.get_db() as conn:
         clauses = []
         params = []
@@ -768,6 +914,11 @@ async def search_advanced(
         elif severity == "none":
             clauses.append("a.deaths = 0 AND a.injuries = 0")
 
+        _valid_parts = {"midnight", "dawn", "morning", "noon", "afternoon", "evening", "night"}
+        if part_of_day and part_of_day in _valid_parts:
+            clauses.append("a.part_of_day = ?")
+            params.append(part_of_day)
+
         if start:
             clauses.append("a.accident_date >= ?")
             params.append(start)
@@ -778,7 +929,12 @@ async def search_advanced(
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         rows = conn.execute(
-            f"""SELECT a.*, ar.title as article_title, ar.url as article_url
+            f"""SELECT a.id, a.article_id, a.accident_type, a.location_raw,
+                       a.district, a.division, a.latitude, a.longitude,
+                       a.deaths, a.injuries, a.vehicles_involved, a.road_name,
+                       a.accident_date, a.accident_time, a.part_of_day,
+                       a.summary, a.created_at,
+                       ar.title as article_title, ar.url as article_url
                 FROM accidents a
                 LEFT JOIN articles ar ON a.article_id = ar.id
                 {where}
@@ -886,59 +1042,86 @@ async def get_forecast(
 # ─── Time-of-Day / Day-of-Week Patterns ────────────────────────
 
 @router.get("/time-patterns")
-async def get_time_patterns():
+async def get_time_patterns(
+    start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
     """
-    Return day-of-week distribution for accidents.
-    Since articles don't include exact time, we compute day-of-week patterns
-    and monthly distribution for a heatmap.
+    Return day-of-week, month, part-of-day, and hour distributions.
+    Optionally filtered by date range.
     """
+    date_filter = "AND accident_date BETWEEN ? AND ?" if (start and end) else ""
+    date_params = (start, end) if (start and end) else ()
+
     with db.get_db() as conn:
-        # Day-of-week distribution (0=Sunday .. 6=Saturday in SQLite strftime %w)
         dow_rows = conn.execute(
-            """SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
+            f"""SELECT CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY dow
-               ORDER BY dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY dow ORDER BY dow""",
+            date_params,
         ).fetchall()
 
-        # Month-of-year distribution
         moy_rows = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+            f"""SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths,
                       COALESCE(SUM(injuries), 0) as injuries
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY month
-               ORDER BY month"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY month ORDER BY month""",
+            date_params,
         ).fetchall()
 
-        # Month x Day-of-week grid for heatmap
         grid_rows = conn.execute(
-            """SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
+            f"""SELECT CAST(strftime('%m', accident_date) AS INTEGER) as month,
                       CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY month, dow
-               ORDER BY month, dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY month, dow ORDER BY month, dow""",
+            date_params,
         ).fetchall()
 
-        # Week-of-month patterns (week 1-5)
         wom_rows = conn.execute(
-            """SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
+            f"""SELECT CAST(((CAST(strftime('%d', accident_date) AS INTEGER) - 1) / 7) + 1 AS INTEGER) as week,
                       CAST(strftime('%w', accident_date) AS INTEGER) as dow,
                       COUNT(*) as accidents,
                       COALESCE(SUM(deaths), 0) as deaths
                FROM accidents
-               WHERE accident_date IS NOT NULL
-               GROUP BY week, dow
-               ORDER BY week, dow"""
+               WHERE accident_date IS NOT NULL {date_filter}
+               GROUP BY week, dow ORDER BY week, dow""",
+            date_params,
+        ).fetchall()
+
+        part_rows = conn.execute(
+            f"""SELECT part_of_day,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE part_of_day IS NOT NULL {date_filter}
+               GROUP BY part_of_day
+               ORDER BY CASE part_of_day
+                   WHEN 'midnight' THEN 0 WHEN 'dawn' THEN 1 WHEN 'morning' THEN 2
+                   WHEN 'noon' THEN 3 WHEN 'afternoon' THEN 4 WHEN 'evening' THEN 5
+                   WHEN 'night' THEN 6 ELSE 7 END""",
+            date_params,
+        ).fetchall()
+
+        hour_rows = conn.execute(
+            f"""SELECT CAST(substr(accident_time, 1, 2) AS INTEGER) as hour,
+                      COUNT(*) as accidents,
+                      COALESCE(SUM(deaths), 0) as deaths,
+                      COALESCE(SUM(injuries), 0) as injuries
+               FROM accidents
+               WHERE accident_time IS NOT NULL {date_filter}
+               GROUP BY hour ORDER BY hour""",
+            date_params,
         ).fetchall()
 
         return {
@@ -946,6 +1129,8 @@ async def get_time_patterns():
             "by_month": [dict(r) for r in moy_rows],
             "grid": [dict(r) for r in grid_rows],
             "week_grid": [dict(r) for r in wom_rows],
+            "by_part_of_day": [dict(r) for r in part_rows],
+            "by_hour": [dict(r) for r in hour_rows],
         }
 
 
@@ -979,60 +1164,63 @@ async def get_accident_clusters(
     clusters = []
     cluster_id = 0
 
+    severity_order = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
+
     for district, accidents in by_district.items():
         if len(accidents) < min_accidents:
             continue
 
-        # Sliding window: find groups of accidents within window_days
-        i = 0
-        while i < len(accidents):
+        seen_starts: set = set()
+        for i in range(len(accidents)):
+            try:
+                d1 = _dt.strptime(accidents[i]["accident_date"], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+
             cluster_accs = [accidents[i]]
-            j = i + 1
-            while j < len(accidents):
+            for j in range(i + 1, len(accidents)):
                 try:
-                    d1 = _dt.strptime(accidents[i]["accident_date"], "%Y-%m-%d")
                     d2 = _dt.strptime(accidents[j]["accident_date"], "%Y-%m-%d")
-                    if (d2 - d1).days <= window_days:
-                        cluster_accs.append(accidents[j])
-                        j += 1
-                    else:
-                        break
                 except (ValueError, TypeError):
-                    j += 1
                     continue
+                if (d2 - d1).days <= window_days:
+                    cluster_accs.append(accidents[j])
+                else:
+                    break
 
-            if len(cluster_accs) >= min_accidents:
-                cluster_id += 1
-                total_deaths = sum(a.get("deaths", 0) or 0 for a in cluster_accs)
-                total_injuries = sum(a.get("injuries", 0) or 0 for a in cluster_accs)
-                date_start = cluster_accs[0]["accident_date"]
-                date_end = cluster_accs[-1]["accident_date"]
-                severity = (
-                    "critical" if total_deaths >= 10
-                    else "high" if total_deaths >= 5
-                    else "moderate" if total_deaths >= 2
-                    else "low"
-                )
-                clusters.append({
-                    "cluster_id": cluster_id,
-                    "district": district,
-                    "division": cluster_accs[0].get("division"),
-                    "accidents_count": len(cluster_accs),
-                    "total_deaths": total_deaths,
-                    "total_injuries": total_injuries,
-                    "date_start": date_start,
-                    "date_end": date_end,
-                    "span_days": (_dt.strptime(date_end, "%Y-%m-%d") - _dt.strptime(date_start, "%Y-%m-%d")).days if date_start != date_end else 0,
-                    "severity": severity,
-                    "accidents": cluster_accs,
-                })
-                i = j  # skip past this cluster
-            else:
-                i += 1
+            if len(cluster_accs) < min_accidents:
+                continue
 
-    # Sort by recency, then severity
-    severity_order = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
-    clusters.sort(key=lambda c: (c["date_start"]), reverse=True)
+            date_start = cluster_accs[0]["accident_date"]
+            if date_start in seen_starts:
+                continue
+            seen_starts.add(date_start)
+
+            cluster_id += 1
+            total_deaths = sum(a.get("deaths", 0) or 0 for a in cluster_accs)
+            total_injuries = sum(a.get("injuries", 0) or 0 for a in cluster_accs)
+            date_end = cluster_accs[-1]["accident_date"]
+            severity = (
+                "critical" if total_deaths >= 10
+                else "high" if total_deaths >= 5
+                else "moderate" if total_deaths >= 2
+                else "low"
+            )
+            clusters.append({
+                "cluster_id": cluster_id,
+                "district": district,
+                "division": cluster_accs[0].get("division"),
+                "accidents_count": len(cluster_accs),
+                "total_deaths": total_deaths,
+                "total_injuries": total_injuries,
+                "date_start": date_start,
+                "date_end": date_end,
+                "span_days": (_dt.strptime(date_end, "%Y-%m-%d") - _dt.strptime(date_start, "%Y-%m-%d")).days if date_start != date_end else 0,
+                "severity": severity,
+                "accidents": cluster_accs,
+            })
+
+    clusters.sort(key=lambda c: (c["date_start"], severity_order.get(c["severity"], 9)), reverse=True)
     return clusters
 
 
@@ -1517,11 +1705,14 @@ async def get_road_analysis(
 
 @router.get("/blackspots")
 async def get_blackspots(
-    eps_km: float = Query(5.0, ge=0.5, le=50, description="Cluster radius in km"),
+    eps_km: float = Query(45.0, ge=10.0, le=200, description="Cluster radius in km"),
     min_samples: int = Query(3, ge=2, le=20, description="Min accidents per cluster"),
 ):
-    """Identify geographic accident blackspots using DBSCAN spatial clustering."""
-    import hashlib
+    """
+    Identify regional accident clusters by grouping neighboring districts using DBSCAN.
+    Coordinates are district centroids — eps_km should be large enough (30–80 km)
+    to bridge adjacent districts into meaningful geographic regions.
+    """
     import numpy as np
     try:
         from sklearn.cluster import DBSCAN
@@ -1539,42 +1730,25 @@ async def get_blackspots(
     if len(rows) < min_samples:
         return []
 
-    # Since coordinates are district centroids, apply deterministic jitter
-    # based on each accident's unique attributes so DBSCAN can find
-    # meaningful sub-clusters within districts.
-    def jitter_coord(row):
-        seed_str = f"{row['id']}-{row['location_raw'] or ''}-{row['accident_date'] or ''}-{row['accident_type'] or ''}"
-        h = hashlib.md5(seed_str.encode()).hexdigest()
-        # ~0.05 degrees ≈ 5.5 km spread around centroid
-        dlat = (int(h[:8], 16) / 0xFFFFFFFF - 0.5) * 0.10
-        dlon = (int(h[8:16], 16) / 0xFFFFFFFF - 0.5) * 0.10
-        return (row["latitude"] + dlat, row["longitude"] + dlon)
-
-    jittered = [jitter_coord(r) for r in rows]
-    coords = np.array(jittered)
-
-    # Convert km radius to approximate radians for haversine
+    coords = np.array([(r["latitude"], r["longitude"]) for r in rows])
     eps_rad = eps_km / 6371.0
 
     db_scan = DBSCAN(eps=eps_rad, min_samples=min_samples, metric="haversine")
     labels = db_scan.fit_predict(np.radians(coords))
 
-    # Group accidents by cluster label (ignore noise label -1)
     from collections import defaultdict
     cluster_map = defaultdict(list)
-    cluster_coords = defaultdict(list)
     for i, label in enumerate(labels):
         if label >= 0:
             cluster_map[int(label)].append(dict(rows[i]))
-            cluster_coords[int(label)].append(jittered[i])
 
-    blackspots = []
+    clusters = []
     for cid, accidents in cluster_map.items():
-        j_lats = [c[0] for c in cluster_coords[cid]]
-        j_lons = [c[1] for c in cluster_coords[cid]]
+        lats = [a["latitude"] for a in accidents]
+        lons = [a["longitude"] for a in accidents]
         total_deaths = sum(a.get("deaths", 0) or 0 for a in accidents)
         total_injuries = sum(a.get("injuries", 0) or 0 for a in accidents)
-        districts = list({a["district"] for a in accidents if a["district"]})
+        districts = sorted({a["district"] for a in accidents if a["district"]})
 
         severity = (
             "critical" if total_deaths >= 10
@@ -1583,35 +1757,49 @@ async def get_blackspots(
             else "low"
         )
 
-        blackspots.append({
+        clusters.append({
             "cluster_id": cid,
-            "center_lat": round(sum(j_lats) / len(j_lats), 6),
-            "center_lon": round(sum(j_lons) / len(j_lons), 6),
+            "center_lat": round(sum(lats) / len(lats), 6),
+            "center_lon": round(sum(lons) / len(lons), 6),
             "radius_km": eps_km,
             "accident_count": len(accidents),
             "total_deaths": total_deaths,
             "total_injuries": total_injuries,
             "districts": districts,
+            "district_count": len(districts),
             "severity": severity,
             "accidents": accidents,
         })
 
-    blackspots.sort(key=lambda b: (-b["total_deaths"], -b["accident_count"]))
-    return blackspots
+    clusters.sort(key=lambda c: (-c["total_deaths"], -c["accident_count"]))
+    return clusters
 
 
 # ─── Vehicle Type Analytics ─────────────────────────────────────
 
 @router.get("/vehicle-analytics")
-async def get_vehicle_analytics():
-    """Deep dive into accident statistics by vehicle type."""
+async def get_vehicle_analytics(
+    start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
+    """Deep dive into accident statistics by vehicle type, optionally filtered by date range."""
     with db.get_db() as conn:
-        rows = conn.execute(
-            """SELECT id, vehicles_involved, deaths, injuries, accident_type,
-                      accident_date, district
-               FROM accidents
-               WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''"""
-        ).fetchall()
+        if start and end:
+            rows = conn.execute(
+                """SELECT id, vehicles_involved, deaths, injuries, accident_type,
+                          accident_date, district
+                   FROM accidents
+                   WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''
+                     AND accident_date BETWEEN ? AND ?""",
+                (start, end),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, vehicles_involved, deaths, injuries, accident_type,
+                          accident_date, district
+                   FROM accidents
+                   WHERE vehicles_involved IS NOT NULL AND vehicles_involved != ''"""
+            ).fetchall()
 
     from collections import defaultdict, Counter
 

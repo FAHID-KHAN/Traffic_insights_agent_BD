@@ -192,7 +192,7 @@ All endpoints are mounted under the `/api` prefix via `APIRouter(prefix="/api")`
 | GET | `/api/compare/monthly` | Side-by-side month comparison (delta indicators) | Compare |
 | GET | `/api/compare/yearly` | Side-by-side year comparison | Compare |
 | GET | `/api/forecast` | 3-month simple moving-average forecast | Dashboard (ForecastChart) |
-| GET | `/api/time-patterns` | Month × day-of-week accident heatmap data | Dashboard (TimeHeatmap) |
+| GET | `/api/time-patterns` | Time analytics: day-of-week, month, month×day grid, week grid, part-of-day, and hour-of-day aggregates | Dashboard (TimeHeatmap) |
 | GET | `/api/clusters` | Sliding-window accident cluster detection | Dashboard (ClusterTimeline) |
 | GET | `/api/yoy-summary` | Year-over-year summary with current vs previous year | Dashboard (YoYSummary) |
 | GET | `/api/alerts/high-severity` | Recent accidents with 5+ deaths (last 3 days) | AlertBanner |
@@ -215,6 +215,8 @@ routes.py
 ```
 
 **Thread safety:** The YouTube video cache (`_yt_cache`) uses a `threading.Lock()` for safe concurrent access.
+
+**Time analytics response:** `GET /api/time-patterns` reads from `accidents.accident_date`, `accidents.accident_time`, and `accidents.part_of_day`. It returns existing date-based groups (`by_dow`, `by_month`, `grid`, `week_grid`) plus `by_part_of_day` and `by_hour` aggregates. The new time groups are analytics-only and do not change recent, records, map, search, or CSV export response shapes.
 
 ### Rate Limiting
 
@@ -619,7 +621,7 @@ Stores raw scraped article content. One row per news article URL.
 
 #### `accidents`
 
-Stores structured data extracted from articles. One article can produce one accident record.
+Stores structured data extracted from articles. One article can produce one or more concrete accident records.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -635,7 +637,9 @@ Stores structured data extracted from articles. One article can produce one acci
 | `injuries` | INTEGER | DEFAULT 0 | Number injured |
 | `vehicles_involved` | TEXT | — | Comma-separated vehicle list |
 | `road_name` | TEXT | — | Canonical named road/highway/expressway/bridge when stated |
-| `accident_date` | DATE | — | Date of accident |
+| `accident_date` | DATE | — | Canonical accident date from the source article `published_date` |
+| `accident_time` | TEXT | — | Nullable occurrence time in canonical `HH:MM` 24-hour format |
+| `part_of_day` | TEXT | — | Nullable fixed label: `midnight`, `dawn`, `morning`, `noon`, `afternoon`, `evening`, or `night` |
 | `summary` | TEXT | — | Auto-generated 200-char summary |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation time |
 
@@ -655,7 +659,7 @@ Tracks every scrape session for monitoring and debugging.
 ### Relationships
 
 ```
-articles  ◀──── 1:1 ────▶  accidents
+articles  ◀──── 1:N ────▶  accidents
    │                           │
    │  articles.id = accidents.article_id (FK)
    │                           │
@@ -671,6 +675,8 @@ articles  ◀──── 1:1 ────▶  accidents
 | `idx_accidents_division` | accidents | `division` | Fast division-level stats |
 | `idx_accidents_type` | accidents | `accident_type` | Fast type breakdowns |
 | `idx_accidents_article` | accidents | `article_id` | Fast article-accident joins |
+| `idx_accidents_part_of_day` | accidents | `part_of_day` | Fast part-of-day analytics |
+| `idx_accidents_time` | accidents | `accident_time` | Fast hour-of-day analytics |
 | `idx_articles_url` | articles | `url` | O(1) duplicate checking during scraping |
 | `idx_articles_published` | articles | `published_date` | Date-range queries |
 

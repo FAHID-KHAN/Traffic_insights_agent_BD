@@ -72,11 +72,11 @@ export default function Terms() {
       </section>
 
       <section className="legal-section">
-        <h3>5. Respectful Scraping Practices</h3>
+        <h3>5. Respectful Scanning Practices</h3>
         <ul>
           <li>We respect <code>robots.txt</code> directives of the source websites.</li>
           <li>Requests are rate-limited and spaced to avoid placing undue load on source servers.</li>
-          <li>Scraping runs on a scheduled interval (not continuous) with configurable frequency.</li>
+          <li>Scanning runs on a scheduled interval (not continuous) with configurable frequency.</li>
           <li>If a data source requests removal, we will comply promptly.</li>
         </ul>
       </section>
@@ -92,7 +92,7 @@ export default function Terms() {
           <li>Casualty figures, locations, and accident types are derived programmatically and may
             not be 100% accurate.</li>
           <li>We are not responsible for decisions made based on data from this platform.</li>
-          <li>Historical data may be incomplete depending on when scraping was activated.</li>
+          <li>Historical data may be incomplete depending on when scanning was activated.</li>
         </ul>
       </section>
 
