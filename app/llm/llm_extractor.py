@@ -11,13 +11,11 @@ from typing import Optional, Any
 from pydantic import ValidationError
 
 from app.config import DATA_DIR, MAX_DEATHS_PER_EVENT, MAX_INJURIES_PER_EVENT
-from app.database import insert_accident
-from app.geo import DISTRICT_COORDINATES, district_to_division
+from app.dedupe import upsert_accident_event
+from app.geo import DISTRICT_COORDINATES
 from app.llm.fake_data import NON_INCIDENT_PHRASES
 from app.llm.llm_schema import AccidentEvent, ExtractionResult
 from app.llm.openai_client import OpenAIClient, OpenAIClientError
-from app.normalize import normalize_district
-from app.normalize_roads import normalize_road_name
 
 logger = logging.getLogger(__name__)
 
@@ -271,32 +269,12 @@ class LLMAccidentExtractor:
                 )
                 continue
 
-            district = normalize_district(event.district)
-            if district and district not in _ALLOWED_DISTRICTS:
-                district = None
-            division = (event.division.strip() if event.division else None) or (
-                district_to_division(district) if district else None
-            )
-            latitude, longitude = DISTRICT_COORDINATES.get(district, (None, None)) if district else (None, None)
-            # Canonical accident date is the article publish date for consistent daily/monthly grouping.
-            accident_dt = published_date
-            vehicles = ", ".join(event.vehicles_involved) if event.vehicles_involved else None
-            road_name = normalize_road_name(event.road_name)
-
-            accident_id = insert_accident(
+            accident_id = upsert_accident_event(
                 article_id=article_id,
-                accident_type=event.accident_type,
-                location_raw=event.location_raw,
-                district=district,
-                division=division,
-                latitude=latitude,
-                longitude=longitude,
-                deaths=event.deaths,
-                injuries=event.injuries,
-                vehicles_involved=vehicles,
-                road_name=road_name,
-                accident_date=accident_dt,
-                summary=event.summary,
+                event=event,
+                published_date=published_date,
+                title=title,
+                url=url,
             )
             inserted_ids.append(accident_id)
 
