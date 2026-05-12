@@ -24,6 +24,7 @@
 13. [CI/CD Pipeline](#13-cicd-pipeline)
 14. [Networking Architecture](#14-networking-architecture)
 15. [Maintenance & Operations](#15-maintenance--operations)
+    - [15.5 Pushing Local Database to Production](#155-pushing-local-database-to-production)
 16. [Troubleshooting](#16-troubleshooting)
 17. [Security Checklist](#17-security-checklist)
 18. [Disaster Recovery](#18-disaster-recovery)
@@ -1067,7 +1068,59 @@ nginx -t
 systemctl reload nginx
 ```
 
-### 15.5. Server Updates
+### 15.5. Pushing Local Database to Production
+
+Use this when you have a locally updated `accidents.db` (e.g. after a bulk scrape or manual data fix) and want to replace the production database with it.
+
+> **Warning:** This overwrites the entire production database. Make sure you have a backup first (see the backup command in §15.1) and that the local DB is a superset of production data, not a subset.
+
+**Step 1 — Checkpoint the WAL locally**
+
+SQLite in WAL mode keeps uncommitted pages in `.db-wal`. Checkpoint before copying to ensure the `.db` file is complete:
+
+```bash
+# On your local machine, from the repo root
+sqlite3 data/accidents.db "PRAGMA wal_checkpoint(FULL);"
+# Should print: 0|0|0  (busy=0, log=0, checkpointed=0 means WAL is clean)
+```
+
+**Step 2 — Copy the DB to the server**
+
+```bash
+scp data/accidents.db root@168.144.44.239:/tmp/accidents.db
+```
+
+**Step 3 — Stop the container, swap the DB, restart**
+
+```bash
+ssh root@168.144.44.239 "
+  docker stop traffic-insight-prod && \
+  docker cp /tmp/accidents.db traffic-insight-prod:/app/data/accidents.db && \
+  docker start traffic-insight-prod
+"
+```
+
+The container is down only for the few seconds `docker cp` takes. On startup, `init_db()` automatically applies any pending schema migrations (new columns, indexes) without touching existing data.
+
+**Step 4 — Verify**
+
+```bash
+ssh root@168.144.44.239 "curl -s http://localhost:8080/api/overview" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print('accidents:', d['total_accidents'], '| articles:', d['total_articles'])"
+```
+
+**Makefile shortcut (backup only)**
+
+```bash
+# Pull the production DB down to ./backups/ with a timestamp
+make db-backup
+```
+
+There is no `make db-push` equivalent — always follow the manual steps above so you can checkpoint and verify before committing.
+
+---
+
+### 15.6. Server Updates
 
 ```bash
 ssh root@168.144.44.239
