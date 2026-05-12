@@ -2869,6 +2869,37 @@ tr:hover td { background: rgba(0,196,137,0.03); }
 .admin-toast-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #ef4444; }
 
 /* Admin Card Header (with refresh) */
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 1.25rem 0 0;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.admin-tab-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+.admin-tab-btn.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); font-weight: 700; }
+[data-theme="light"] .admin-tab-btn.active { color: var(--bd-green); border-bottom-color: var(--bd-green); }
+
 .admin-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
 .admin-card-header h3 { margin-bottom: 0; }
 .admin-refresh-btn {

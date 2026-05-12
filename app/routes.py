@@ -266,6 +266,137 @@ async def get_scrape_logs(limit: int = Query(20, ge=1, le=100)):
     return db.get_scrape_logs(limit)
 
 
+# ─── Admin Log Endpoints ───────────────────────────────────────
+
+def _read_jsonl_log(path, limit: int) -> list:
+    """Read the last N valid JSON lines from a log file, most-recent first."""
+    import json
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        lines = [l.strip() for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+        result = []
+        for line in reversed(lines):
+            if len(result) >= limit:
+                break
+            try:
+                result.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return result
+    except OSError:
+        return []
+
+
+@router.get("/admin/log-stats")
+async def get_admin_log_stats(_=Depends(verify_admin_key)):
+    """Summary counts across all log files."""
+    import json
+    from pathlib import Path
+    from app.config import DATA_DIR
+
+    discard_path = Path(DATA_DIR) / "non_incident_report.log"
+    dedupe_path  = Path(DATA_DIR) / "dedupe" / "accident_dedupe_decisions.log"
+    ambig_path   = Path(DATA_DIR) / "dedupe" / "accident_dedupe_ambiguity.log"
+    update_path  = Path(DATA_DIR) / "dedupe" / "accident_update_events.log"
+
+    def parse_all(p):
+        if not p.exists():
+            return []
+        rows = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return rows
+
+    discards = parse_all(discard_path)
+    decisions = parse_all(dedupe_path)
+
+    discard_by_reason: dict = {}
+    for d in discards:
+        r = d.get("reason", "unknown")
+        discard_by_reason[r] = discard_by_reason.get(r, 0) + 1
+
+    decision_by_type: dict = {}
+    for d in decisions:
+        dec = d.get("decision", "unknown")
+        decision_by_type[dec] = decision_by_type.get(dec, 0) + 1
+
+    def count_lines(p):
+        try:
+            return sum(1 for l in p.read_text(encoding="utf-8").splitlines() if l.strip())
+        except OSError:
+            return 0
+
+    return {
+        "total_discards": len(discards),
+        "discard_by_reason": discard_by_reason,
+        "total_dedupe_decisions": len(decisions),
+        "decision_by_type": decision_by_type,
+        "ambiguous_count": count_lines(ambig_path),
+        "update_count": count_lines(update_path),
+    }
+
+
+@router.get("/admin/discard-log")
+async def get_discard_log(
+    limit: int = Query(50, ge=1, le=500),
+    reason: Optional[str] = Query(None),
+    _=Depends(verify_admin_key),
+):
+    """Articles discarded by the LLM (outside_bangladesh, non_incident_report, time_window_roundup)."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    rows = _read_jsonl_log(Path(DATA_DIR) / "non_incident_report.log", limit * 3)
+    if reason:
+        rows = [r for r in rows if r.get("reason") == reason]
+    return rows[:limit]
+
+
+@router.get("/admin/dedupe-decisions")
+async def get_dedupe_decisions(
+    limit: int = Query(50, ge=1, le=500),
+    decision: Optional[str] = Query(None),
+    _=Depends(verify_admin_key),
+):
+    """All dedupe decisions — inserted, updated, ambiguous."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    rows = _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_dedupe_decisions.log", limit * 3)
+    if decision:
+        rows = [r for r in rows if r.get("decision") == decision]
+    return rows[:limit]
+
+
+@router.get("/admin/dedupe-ambiguity")
+async def get_dedupe_ambiguity(
+    limit: int = Query(30, ge=1, le=200),
+    _=Depends(verify_admin_key),
+):
+    """Ambiguous possible-duplicate insertions that need manual review."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    return _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_dedupe_ambiguity.log", limit)
+
+
+@router.get("/admin/update-events")
+async def get_update_events(
+    limit: int = Query(30, ge=1, le=200),
+    _=Depends(verify_admin_key),
+):
+    """Records that were merged/updated by the dedupe pipeline."""
+    from pathlib import Path
+    from app.config import DATA_DIR
+    return _read_jsonl_log(Path(DATA_DIR) / "dedupe" / "accident_update_events.log", limit)
+
+
 @router.post("/scrape")
 async def trigger_scrape(request: Request, _=Depends(scrape_limiter), __=Depends(verify_admin_key)):
     """Trigger a scrape cycle. Rate-limited to 3 req/min per IP. Requires admin key."""
